@@ -1,14 +1,40 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePondData } from '@/hooks/usePondData';
+import { Loader2 } from 'lucide-react';
+import Dashboard from './Dashboard';
+import PondSelection from './PondSelection';
 
-const Index = () => {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+export default function Index() {
+  const navigate = useNavigate();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { ponds, isLoading: pondsLoading } = usePondData(user?.ponds || []);
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  if (authLoading || pondsLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-muted-foreground">Loading your ponds...</p>
       </div>
-    </div>
-  );
-};
+    );
+  }
 
-export default Index;
+  if (!isAuthenticated) {
+    return null; // Will redirect to login
+  }
+
+  // If user has only one pond, go directly to dashboard
+  if (ponds.length === 1) {
+    return <Dashboard />;
+  }
+
+  // If user has multiple ponds, show pond selection
+  return <PondSelection />;
+}
