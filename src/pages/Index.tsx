@@ -8,8 +8,8 @@ import PondSelection from './PondSelection';
 
 export default function Index() {
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { ponds, isLoading: pondsLoading } = usePondData(user?.ponds || []);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { ponds, isLoading: pondsLoading } = usePondData();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -35,6 +35,6 @@ export default function Index() {
     return <Dashboard />;
   }
 
-  // If user has multiple ponds, show pond selection
+  // If user has multiple ponds or no ponds, show pond selection
   return <PondSelection />;
 }

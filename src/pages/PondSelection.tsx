@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { usePondData } from '@/hooks/usePondData';
 import { Header } from '@/components/Header';
 import { PondCard } from '@/components/PondCard';
@@ -7,9 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw, Loader2 } from 'lucide-react';
 
 export default function PondSelection() {
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const { ponds, isLoading } = usePondData(user?.ponds || []);
+  const { ponds, isLoading, refetch } = usePondData();
 
   if (isLoading) {
     return (
@@ -21,7 +19,7 @@ export default function PondSelection() {
 
   return (
     <div className="min-h-screen bg-background pb-8">
-      <Header alertCount={2} />
+      <Header alertCount={0} />
       
       <main className="p-4 max-w-2xl mx-auto">
         <div className="mb-6">
@@ -50,9 +48,9 @@ export default function PondSelection() {
             <p className="text-muted-foreground text-sm mb-6">
               No ponds have been assigned to your account yet.
             </p>
-            <Button variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Request Pond Access
+            <Button variant="outline" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
             </Button>
           </div>
         )}

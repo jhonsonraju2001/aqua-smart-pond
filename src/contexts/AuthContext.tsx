@@ -1,116 +1,151 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types/aquaculture';
+import { supabase } from '@/integrations/supabase/client';
+import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
+
+interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
+}
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
+  session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demo
-const mockUsers: Record<string, { password: string; user: User }> = {
-  'admin@aquafarm.com': {
-    password: 'admin123',
-    user: {
-      id: 'admin-1',
-      email: 'admin@aquafarm.com',
-      name: 'Admin User',
-      role: 'admin',
-      ponds: ['pond-1', 'pond-2', 'pond-3'],
-      createdAt: new Date('2024-01-01'),
-    },
-  },
-  'user@aquafarm.com': {
-    password: 'user123',
-    user: {
-      id: 'user-1',
-      email: 'user@aquafarm.com',
-      name: 'John Farmer',
-      role: 'user',
-      ponds: ['pond-1', 'pond-2'],
-      createdAt: new Date('2024-06-01'),
-    },
-  },
-  'demo@aquafarm.com': {
-    password: 'demo',
-    user: {
-      id: 'user-2',
-      email: 'demo@aquafarm.com',
-      name: 'Demo User',
-      role: 'user',
-      ponds: ['pond-1'],
-      createdAt: new Date('2024-12-01'),
-    },
-  },
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
+    try {
+      // Fetch profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('user_id', supabaseUser.id)
+        .maybeSingle();
+
+      // Check if user has admin role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', supabaseUser.id)
+        .maybeSingle();
+
+      const role = roleData?.role as 'admin' | 'user' || 'user';
+      setIsAdmin(role === 'admin');
+
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        name: profile?.full_name || supabaseUser.email?.split('@')[0] || 'User',
+        role,
+      });
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        name: supabaseUser.email?.split('@')[0] || 'User',
+        role: 'user',
+      });
+    }
+  };
 
   useEffect(() => {
-    // Check for existing session
-    const savedUser = localStorage.getItem('aquafarm_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setIsLoading(false);
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setSession(session);
+        
+        if (session?.user) {
+          // Use setTimeout to prevent Supabase client deadlock
+          setTimeout(() => fetchUserProfile(session.user), 0);
+        } else {
+          setUser(null);
+          setIsAdmin(false);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        fetchUserProfile(session.user);
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const mockUser = mockUsers[email.toLowerCase()];
-    if (mockUser && mockUser.password === password) {
-      setUser(mockUser.user);
-      localStorage.setItem('aquafarm_user', JSON.stringify(mockUser.user));
+    if (error) {
       setIsLoading(false);
-    } else {
-      setIsLoading(false);
-      throw new Error('Invalid email or password');
+      throw new Error(error.message);
     }
   };
 
   const signup = async (email: string, password: string, name: string) => {
     setIsLoading(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    if (mockUsers[email.toLowerCase()]) {
-      setIsLoading(false);
-      throw new Error('Email already registered');
-    }
-    
-    const newUser: User = {
-      id: `user-${Date.now()}`,
+    const { error } = await supabase.auth.signUp({
       email,
-      name,
-      role: 'user',
-      ponds: ['pond-1'],
-      createdAt: new Date(),
-    };
+      password,
+      options: {
+        data: {
+          full_name: name,
+        },
+      },
+    });
     
-    setUser(newUser);
-    localStorage.setItem('aquafarm_user', JSON.stringify(newUser));
-    setIsLoading(false);
+    if (error) {
+      setIsLoading(false);
+      throw new Error(error.message);
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      throw new Error(error.message);
+    }
     setUser(null);
-    localStorage.removeItem('aquafarm_user');
+    setSession(null);
+    setIsAdmin(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, signup }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      isLoading, 
+      isAuthenticated: !!session, 
+      isAdmin,
+      login, 
+      logout, 
+      signup 
+    }}>
       {children}
     </AuthContext.Provider>
   );
