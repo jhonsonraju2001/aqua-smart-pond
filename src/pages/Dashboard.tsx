@@ -1,12 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { useSensorData, usePondData, useAlerts } from '@/hooks/usePondData';
 import { Header } from '@/components/Header';
 import { SensorCard } from '@/components/SensorCard';
 import { DeviceControl } from '@/components/DeviceControl';
 import { AlertItem } from '@/components/AlertItem';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { 
   RefreshCw, 
   Clock, 
@@ -23,19 +22,31 @@ import { cn } from '@/lib/utils';
 export default function Dashboard() {
   const { pondId } = useParams<{ pondId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { ponds } = usePondData(user?.ponds || []);
-  const { sensorData, devices, isLoading, lastUpdated, refreshData, toggleDevice, setDeviceAuto } = useSensorData(pondId || '');
+  const { ponds, isLoading: pondsLoading } = usePondData();
+  const { sensorData, devices, isLoading: sensorLoading, lastUpdated, refreshData, toggleDevice, setDeviceAuto } = useSensorData(pondId || '');
   const { alerts, acknowledgeAlert } = useAlerts();
 
-  const pond = ponds.find(p => p.id === pondId);
-  const pondAlerts = alerts.filter(a => a.pondId === pondId && !a.acknowledged);
-  const allAlerts = alerts.filter(a => a.pondId === pondId);
+  const pond = ponds.find(p => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
+  const activePondId = pond?.id || pondId || '';
+  const pondAlerts = alerts.filter(a => a.pondId === activePondId && !a.acknowledged);
+  const allAlerts = alerts.filter(a => a.pondId === activePondId);
 
-  if (isLoading || !pond) {
+  if (pondsLoading || sensorLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!pond) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Pond Not Found</h2>
+          <p className="text-muted-foreground mb-4">The requested pond could not be found.</p>
+          <Button onClick={() => navigate('/')}>Go Back</Button>
+        </div>
       </div>
     );
   }
@@ -101,7 +112,7 @@ export default function Dashboard() {
         <section className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-lg text-foreground">Device Controls</h2>
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/pond/${pondId}/schedules`)}>
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/pond/${activePondId}/schedules`)}>
               <Calendar className="h-4 w-4 mr-1" />
               Schedules
             </Button>
@@ -125,7 +136,7 @@ export default function Dashboard() {
             <Card 
               variant="device" 
               className="cursor-pointer hover:shadow-card transition-shadow"
-              onClick={() => navigate(`/pond/${pondId}/reports`)}
+              onClick={() => navigate(`/pond/${activePondId}/reports`)}
             >
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">

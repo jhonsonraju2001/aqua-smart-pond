@@ -14,16 +14,248 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      alerts: {
+        Row: {
+          id: string
+          is_active: boolean
+          message: string
+          pond_id: string
+          resolved_at: string | null
+          severity: string
+          triggered_at: string
+          type: string
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean
+          message: string
+          pond_id: string
+          resolved_at?: string | null
+          severity: string
+          triggered_at?: string
+          type: string
+        }
+        Update: {
+          id?: string
+          is_active?: boolean
+          message?: string
+          pond_id?: string
+          resolved_at?: string | null
+          severity?: string
+          triggered_at?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_pond_id_fkey"
+            columns: ["pond_id"]
+            isOneToOne: false
+            referencedRelation: "ponds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_schedules: {
+        Row: {
+          created_at: string
+          days_of_week: number[]
+          device_id: string
+          end_time: string
+          id: string
+          is_active: boolean
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          days_of_week: number[]
+          device_id: string
+          end_time: string
+          id?: string
+          is_active?: boolean
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          days_of_week?: number[]
+          device_id?: string
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_schedules_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      devices: {
+        Row: {
+          auto_mode: boolean
+          created_at: string
+          id: string
+          is_on: boolean
+          name: string
+          pond_id: string
+          type: string
+        }
+        Insert: {
+          auto_mode?: boolean
+          created_at?: string
+          id?: string
+          is_on?: boolean
+          name: string
+          pond_id: string
+          type: string
+        }
+        Update: {
+          auto_mode?: boolean
+          created_at?: string
+          id?: string
+          is_on?: boolean
+          name?: string
+          pond_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devices_pond_id_fkey"
+            columns: ["pond_id"]
+            isOneToOne: false
+            referencedRelation: "ponds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ponds: {
+        Row: {
+          created_at: string
+          device_ip: string
+          id: string
+          location: string | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_ip: string
+          id?: string
+          location?: string | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_ip?: string
+          id?: string
+          location?: string | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sensor_readings: {
+        Row: {
+          dissolved_oxygen: number
+          id: string
+          ph: number
+          pond_id: string
+          recorded_at: string
+          temperature: number
+        }
+        Insert: {
+          dissolved_oxygen: number
+          id?: string
+          ph: number
+          pond_id: string
+          recorded_at?: string
+          temperature: number
+        }
+        Update: {
+          dissolved_oxygen?: number
+          id?: string
+          ph?: number
+          pond_id?: string
+          recorded_at?: string
+          temperature?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sensor_readings_pond_id_fkey"
+            columns: ["pond_id"]
+            isOneToOne: false
+            referencedRelation: "ponds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +382,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
