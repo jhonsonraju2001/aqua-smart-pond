@@ -7,8 +7,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Waves, Mail, Lock, User, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Waves, Mail, Lock, User, Loader2, Eye, EyeOff, Shield, Users, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Demo account credentials for client presentation
+const DEMO_ACCOUNTS = {
+  admin: { email: 'admin@aquafarm.demo', password: 'demo123', label: 'Admin', icon: Shield, description: 'Full system access' },
+  multiPond: { email: 'farmer@aquafarm.demo', password: 'demo123', label: 'Multi-Pond', icon: Users, description: 'Multiple ponds' },
+  singlePond: { email: 'user@aquafarm.demo', password: 'demo123', label: 'Single Pond', icon: Database, description: 'One pond view' },
+};
 
 export default function Login() {
   const navigate = useNavigate();
@@ -24,6 +31,22 @@ export default function Login() {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirm, setSignupConfirm] = useState('');
+  const [demoLoading, setDemoLoading] = useState<string | null>(null);
+
+  const handleDemoLogin = async (accountType: keyof typeof DEMO_ACCOUNTS) => {
+    const account = DEMO_ACCOUNTS[accountType];
+    setDemoLoading(accountType);
+    
+    try {
+      await login(account.email, account.password);
+      toast.success(`Welcome! Logged in as ${account.label}`);
+      navigate('/');
+    } catch (error) {
+      toast.error('Demo account not set up. Please create it first via Sign Up.');
+    } finally {
+      setDemoLoading(null);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,10 +179,35 @@ export default function Login() {
                   </Button>
                 </form>
 
-                <div className="mt-6 p-4 rounded-xl bg-muted/50">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">New here?</p>
-                  <p className="text-xs text-muted-foreground">
-                    Click the <span className="font-semibold">Sign Up</span> tab above to create your account and start monitoring your ponds.
+                {/* Demo Login Section */}
+                <div className="mt-6 p-4 rounded-xl bg-muted/50 space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">Demo Accounts</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Object.entries(DEMO_ACCOUNTS).map(([key, account]) => {
+                      const Icon = account.icon;
+                      return (
+                        <Button
+                          key={key}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDemoLogin(key as keyof typeof DEMO_ACCOUNTS)}
+                          disabled={isLoading || demoLoading !== null}
+                          className="flex flex-col items-center gap-1 h-auto py-3"
+                        >
+                          {demoLoading === key ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Icon className="h-4 w-4" />
+                          )}
+                          <span className="text-xs font-medium">{account.label}</span>
+                          <span className="text-[10px] text-muted-foreground">{account.description}</span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground text-center">
+                    Password for all demo accounts: <code className="bg-background px-1 rounded">demo123</code>
                   </p>
                 </div>
               </CardContent>
