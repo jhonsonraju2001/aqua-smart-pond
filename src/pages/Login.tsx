@@ -157,12 +157,10 @@ export default function Login() {
                 </form>
 
                 <div className="mt-6 p-4 rounded-xl bg-muted/50">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Demo Accounts:</p>
-                  <div className="space-y-1 text-xs text-muted-foreground">
-                    <p><span className="font-mono">admin@aquafarm.com</span> / admin123 (Admin)</p>
-                    <p><span className="font-mono">user@aquafarm.com</span> / user123 (Multi-pond)</p>
-                    <p><span className="font-mono">demo@aquafarm.com</span> / demo (Single pond)</p>
-                  </div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">New here?</p>
+                  <p className="text-xs text-muted-foreground">
+                    Click the <span className="font-semibold">Sign Up</span> tab above to create your account and start monitoring your ponds.
+                  </p>
                 </div>
               </CardContent>
             </TabsContent>
