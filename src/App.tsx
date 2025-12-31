@@ -6,8 +6,12 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
+import PondHome from "./pages/PondHome";
 import PondSelection from "./pages/PondSelection";
+import LiveSensors from "./pages/LiveSensors";
+import DeviceControls from "./pages/DeviceControls";
+import Reports from "./pages/Reports";
+import PondAlerts from "./pages/PondAlerts";
 import Alerts from "./pages/Alerts";
 import AdminPanel from "./pages/AdminPanel";
 import Profile from "./pages/Profile";
@@ -62,7 +66,39 @@ function AppRoutes() {
         path="/pond/:pondId" 
         element={
           <ProtectedRoute>
-            <Dashboard />
+            <PondHome />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/pond/:pondId/sensors" 
+        element={
+          <ProtectedRoute>
+            <LiveSensors />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/pond/:pondId/devices" 
+        element={
+          <ProtectedRoute>
+            <DeviceControls />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/pond/:pondId/reports" 
+        element={
+          <ProtectedRoute>
+            <Reports />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/pond/:pondId/alerts" 
+        element={
+          <ProtectedRoute>
+            <PondAlerts />
           </ProtectedRoute>
         } 
       />
