@@ -1,7 +1,8 @@
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
-import { SensorStatus } from '@/types/aquaculture';
 import { Droplets, Thermometer, FlaskConical } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
 
 interface SensorCardProps {
   type: 'ph' | 'do' | 'temperature';
@@ -55,6 +56,18 @@ export function SensorCard({ type, value, className }: SensorCardProps) {
   const config = sensorConfig[type];
   const status = config.getStatus(value);
   const Icon = config.icon;
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [prevValue, setPrevValue] = useState(value);
+
+  // Trigger update animation when value changes
+  useEffect(() => {
+    if (value !== prevValue) {
+      setIsUpdating(true);
+      setPrevValue(value);
+      const timer = setTimeout(() => setIsUpdating(false), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [value, prevValue]);
 
   const statusStyles = {
     safe: 'sensor-safe',
@@ -74,6 +87,12 @@ export function SensorCard({ type, value, className }: SensorCardProps) {
     critical: 'bg-status-critical/10',
   };
 
+  const statusGlowColors = {
+    safe: 'shadow-[0_0_20px_-5px_hsl(var(--status-safe)/0.5)]',
+    warning: 'shadow-[0_0_20px_-5px_hsl(var(--status-warning)/0.5)]',
+    critical: 'shadow-[0_0_20px_-5px_hsl(var(--status-critical)/0.5)]',
+  };
+
   const statusLabels = {
     safe: 'Normal',
     warning: 'Warning',
@@ -81,48 +100,120 @@ export function SensorCard({ type, value, className }: SensorCardProps) {
   };
 
   return (
-    <Card
-      variant="sensor"
-      className={cn(
-        'overflow-hidden animate-fade-in',
-        statusStyles[status],
-        className
-      )}
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3 }}
     >
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <div className={cn('p-2.5 rounded-xl', statusBgColors[status])}>
-            <Icon className={cn('h-6 w-6', statusColors[status])} />
-          </div>
-          <div
+      <Card
+        className={cn(
+          'overflow-hidden border-2 transition-all duration-500',
+          statusStyles[status],
+          isUpdating && statusGlowColors[status],
+          className
+        )}
+      >
+        <CardContent className="p-5 relative overflow-hidden">
+          {/* Animated background pulse */}
+          <motion.div
             className={cn(
-              'px-2.5 py-1 rounded-full text-xs font-medium',
-              statusBgColors[status],
-              statusColors[status],
-              status !== 'safe' && 'status-pulse'
+              'absolute inset-0 opacity-0',
+              statusBgColors[status]
             )}
-          >
-            {statusLabels[status]}
-          </div>
-        </div>
-        
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">
-            {config.label}
-          </p>
-          <div className="flex items-baseline gap-1">
-            <span className={cn('text-4xl font-bold tracking-tight', statusColors[status])}>
-              {value.toFixed(type === 'temperature' ? 1 : 2)}
+            animate={{
+              opacity: isUpdating ? [0, 0.3, 0] : 0,
+            }}
+            transition={{ duration: 0.6 }}
+          />
+
+          {/* Live indicator pulse */}
+          <div className="absolute top-4 right-4">
+            <span className="relative flex h-3 w-3">
+              <span 
+                className={cn(
+                  'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
+                  status === 'safe' && 'bg-status-safe',
+                  status === 'warning' && 'bg-status-warning',
+                  status === 'critical' && 'bg-status-critical'
+                )} 
+              />
+              <span 
+                className={cn(
+                  'relative inline-flex rounded-full h-3 w-3',
+                  status === 'safe' && 'bg-status-safe',
+                  status === 'warning' && 'bg-status-warning',
+                  status === 'critical' && 'bg-status-critical'
+                )} 
+              />
             </span>
-            <span className="text-lg text-muted-foreground font-medium">
-              {config.unit}
-            </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Safe range: {config.min} - {config.max} {config.unit}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+
+          <div className="flex items-start justify-between mb-3 relative">
+            <motion.div 
+              className={cn('p-2.5 rounded-xl', statusBgColors[status])}
+              animate={{
+                scale: isUpdating ? [1, 1.1, 1] : 1,
+                rotate: isUpdating ? [0, -5, 5, 0] : 0,
+              }}
+              transition={{ duration: 0.4 }}
+            >
+              <Icon className={cn('h-6 w-6', statusColors[status])} />
+            </motion.div>
+            <motion.div
+              className={cn(
+                'px-2.5 py-1 rounded-full text-xs font-medium',
+                statusBgColors[status],
+                statusColors[status]
+              )}
+              animate={{
+                scale: status !== 'safe' ? [1, 1.05, 1] : 1,
+              }}
+              transition={{
+                duration: 1.5,
+                repeat: status !== 'safe' ? Infinity : 0,
+                ease: 'easeInOut',
+              }}
+            >
+              {statusLabels[status]}
+            </motion.div>
+          </div>
+          
+          <div className="space-y-1 relative">
+            <p className="text-sm font-medium text-muted-foreground">
+              {config.label}
+            </p>
+            <div className="flex items-baseline gap-1">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={value}
+                  className={cn('text-4xl font-bold tracking-tight', statusColors[status])}
+                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.9 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                >
+                  {value.toFixed(type === 'temperature' ? 1 : 2)}
+                </motion.span>
+              </AnimatePresence>
+              <span className="text-lg text-muted-foreground font-medium">
+                {config.unit}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Safe range: {config.min} - {config.max} {config.unit}
+            </p>
+          </div>
+
+          {/* Shimmer effect on update */}
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
+            animate={{
+              translateX: isUpdating ? ['100%', '-100%'] : '-100%',
+            }}
+            transition={{ duration: 0.8, ease: 'easeInOut' }}
+          />
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
