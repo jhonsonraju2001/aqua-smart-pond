@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePondData } from '@/hooks/usePondData';
 import { Loader2 } from 'lucide-react';
-import Dashboard from './Dashboard';
+import PondHome from './PondHome';
 import PondSelection from './PondSelection';
 
 export default function Index() {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
   const { ponds, isLoading: pondsLoading } = usePondData();
 
   useEffect(() => {
@@ -16,6 +16,13 @@ export default function Index() {
       navigate('/login');
     }
   }, [authLoading, isAuthenticated, navigate]);
+
+  // Redirect admins to admin panel
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && isAdmin) {
+      navigate('/admin');
+    }
+  }, [authLoading, isAuthenticated, isAdmin, navigate]);
 
   if (authLoading || pondsLoading) {
     return (
@@ -26,15 +33,15 @@ export default function Index() {
     );
   }
 
-  if (!isAuthenticated) {
-    return null; // Will redirect to login
+  if (!isAuthenticated || isAdmin) {
+    return null;
   }
 
-  // If user has only one pond, go directly to dashboard
+  // Single pond user → go to pond home with action buttons
   if (ponds.length === 1) {
-    return <Dashboard />;
+    return <PondHome />;
   }
 
-  // If user has multiple ponds or no ponds, show pond selection
+  // Multi-pond user → show pond selection
   return <PondSelection />;
 }
