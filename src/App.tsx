@@ -10,6 +10,8 @@ import PondHome from "./pages/PondHome";
 import PondSelection from "./pages/PondSelection";
 import LiveSensors from "./pages/LiveSensors";
 import DeviceControls from "./pages/DeviceControls";
+import DeviceSchedules from "./pages/DeviceSchedules";
+import ThresholdSettings from "./pages/ThresholdSettings";
 import Reports from "./pages/Reports";
 import PondAlerts from "./pages/PondAlerts";
 import Alerts from "./pages/Alerts";
@@ -87,6 +89,14 @@ function AppRoutes() {
         } 
       />
       <Route 
+        path="/pond/:pondId/schedules" 
+        element={
+          <ProtectedRoute>
+            <DeviceSchedules />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/pond/:pondId/reports" 
         element={
           <ProtectedRoute>
@@ -99,6 +109,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <PondAlerts />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/settings/thresholds" 
+        element={
+          <ProtectedRoute>
+            <ThresholdSettings />
           </ProtectedRoute>
         } 
       />

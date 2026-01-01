@@ -2,12 +2,14 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Droplets, Thermometer, FlaskConical, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useSensorAlerts } from '@/hooks/useSensorAlerts';
+import { Sparkline } from './sensors/Sparkline';
 
 interface SensorCardProps {
   type: 'ph' | 'do' | 'temperature';
   value: number;
+  history?: number[];
   className?: string;
 }
 
@@ -53,7 +55,7 @@ const sensorConfig = {
   },
 };
 
-export function SensorCard({ type, value, className }: SensorCardProps) {
+export function SensorCard({ type, value, history = [], className }: SensorCardProps) {
   const config = sensorConfig[type];
   const status = config.getStatus(value);
   const Icon = config.icon;
@@ -126,7 +128,7 @@ export function SensorCard({ type, value, className }: SensorCardProps) {
 
         <CardContent className="p-5 pl-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <div className={cn(
                 'p-2.5 rounded-xl transition-colors duration-300',
@@ -173,7 +175,7 @@ export function SensorCard({ type, value, className }: SensorCardProps) {
           </div>
 
           {/* Value display */}
-          <div className="flex items-end justify-between mb-4">
+          <div className="flex items-end justify-between mb-3">
             <div className="flex items-baseline gap-1.5">
               <AnimatePresence mode="wait">
                 <motion.span
@@ -211,6 +213,13 @@ export function SensorCard({ type, value, className }: SensorCardProps) {
               <span>{trend === 'stable' ? 'Stable' : trend === 'up' ? 'Rising' : 'Falling'}</span>
             </motion.div>
           </div>
+
+          {/* Sparkline */}
+          {history.length >= 2 && (
+            <div className="mb-3">
+              <Sparkline data={history} status={status} height={40} />
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="relative">
