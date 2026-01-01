@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSensorData, usePondData } from '@/hooks/usePondData';
+import { useSensorHistory } from '@/hooks/useSensorHistory';
 import { Header } from '@/components/Header';
 import { SensorCard } from '@/components/SensorCard';
 import { Button } from '@/components/ui/button';
@@ -7,18 +8,32 @@ import {
   RefreshCw, 
   Clock,
   Loader2,
-  Activity
+  Activity,
+  Settings
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
+import { useEffect } from 'react';
 
 export default function LiveSensors() {
   const { pondId } = useParams<{ pondId: string }>();
   const navigate = useNavigate();
   const { ponds, isLoading: pondsLoading } = usePondData();
   const { sensorData, isLoading: sensorLoading, lastUpdated, refreshData } = useSensorData(pondId || '');
+  const { phHistory, doHistory, tempHistory, addReading } = useSensorHistory(pondId || '');
 
   const pond = ponds.find(p => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
+
+  // Update history when sensor data changes
+  useEffect(() => {
+    if (sensorData) {
+      addReading({
+        ph: sensorData.ph,
+        dissolvedOxygen: sensorData.dissolvedOxygen,
+        temperature: sensorData.temperature,
+      });
+    }
+  }, [sensorData?.ph, sensorData?.dissolvedOxygen, sensorData?.temperature]);
 
   if (pondsLoading || sensorLoading) {
     return (
@@ -64,16 +79,26 @@ export default function LiveSensors() {
             </div>
           </div>
           
-          <motion.div whileTap={{ rotate: 180 }} transition={{ duration: 0.3 }}>
+          <div className="flex items-center gap-2">
             <Button 
               variant="outline" 
               size="icon" 
-              onClick={refreshData}
+              onClick={() => navigate('/settings/thresholds')}
               className="rounded-xl"
             >
-              <RefreshCw className="h-4 w-4" />
+              <Settings className="h-4 w-4" />
             </Button>
-          </motion.div>
+            <motion.div whileTap={{ rotate: 180 }} transition={{ duration: 0.3 }}>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={refreshData}
+                className="rounded-xl"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </motion.div>
+          </div>
         </motion.div>
 
         {/* Sensor Cards */}
@@ -84,7 +109,11 @@ export default function LiveSensors() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.4, delay: 0.1 }}
             >
-              <SensorCard type="ph" value={sensorData.ph} />
+              <SensorCard 
+                type="ph" 
+                value={sensorData.ph} 
+                history={phHistory}
+              />
             </motion.div>
             
             <motion.div
@@ -92,7 +121,11 @@ export default function LiveSensors() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.4, delay: 0.2 }}
             >
-              <SensorCard type="do" value={sensorData.dissolvedOxygen} />
+              <SensorCard 
+                type="do" 
+                value={sensorData.dissolvedOxygen} 
+                history={doHistory}
+              />
             </motion.div>
             
             <motion.div
@@ -100,7 +133,11 @@ export default function LiveSensors() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.4, delay: 0.3 }}
             >
-              <SensorCard type="temperature" value={sensorData.temperature} />
+              <SensorCard 
+                type="temperature" 
+                value={sensorData.temperature} 
+                history={tempHistory}
+              />
             </motion.div>
           </div>
         )}
