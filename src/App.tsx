@@ -12,6 +12,7 @@ import LiveSensors from "./pages/LiveSensors";
 import DeviceControls from "./pages/DeviceControls";
 import DeviceSchedules from "./pages/DeviceSchedules";
 import ThresholdSettings from "./pages/ThresholdSettings";
+import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
 import PondAlerts from "./pages/PondAlerts";
 import Alerts from "./pages/Alerts";
@@ -115,6 +116,14 @@ function AppRoutes() {
         } 
       />
       <Route 
+        path="/settings" 
+        element={
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/settings/thresholds" 
         element={
           <ProtectedRoute>
@@ -122,7 +131,7 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
-      <Route 
+      <Route
         path="/alerts" 
         element={
           <ProtectedRoute>
