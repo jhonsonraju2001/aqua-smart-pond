@@ -1,11 +1,23 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdminData } from '@/hooks/usePondData';
+import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   Users, 
   Waves, 
@@ -15,14 +27,60 @@ import {
   ChevronRight,
   Shield,
   BarChart3,
-  Loader2
+  Loader2,
+  Trash2,
+  Eye
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export default function AdminPanel() {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { users, allPonds, systemAlerts, isLoading: dataLoading } = useAdminData();
+  const { users, allPonds, systemAlerts, isLoading: dataLoading, refetch } = useAdminData();
+  const [deletingPondId, setDeletingPondId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeletePond = async () => {
+    if (!deletingPondId) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      // Delete all related data first
+      await supabase.from('alerts').delete().eq('pond_id', deletingPondId);
+      await supabase.from('sensor_readings').delete().eq('pond_id', deletingPondId);
+      
+      // Get devices for this pond
+      const { data: devices } = await supabase
+        .from('devices')
+        .select('id')
+        .eq('pond_id', deletingPondId);
+      
+      if (devices && devices.length > 0) {
+        const deviceIds = devices.map(d => d.id);
+        await supabase.from('device_schedules').delete().in('device_id', deviceIds);
+        await supabase.from('devices').delete().eq('pond_id', deletingPondId);
+      }
+      
+      // Finally delete the pond
+      const { error } = await supabase
+        .from('ponds')
+        .delete()
+        .eq('id', deletingPondId);
+      
+      if (error) throw error;
+      
+      toast.success('Pond removed successfully');
+      refetch();
+    } catch (error) {
+      console.error('Error deleting pond:', error);
+      toast.error('Failed to remove pond');
+    } finally {
+      setIsDeleting(false);
+      setDeletingPondId(null);
+    }
+  };
 
   // Show loading while checking auth
   if (authLoading) {
@@ -33,7 +91,7 @@ export default function AdminPanel() {
     );
   }
 
-  // Redirect if not admin (check via isAdmin from context which queries database)
+  // Redirect if not admin
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -53,7 +111,7 @@ export default function AdminPanel() {
     );
   }
 
-  const warningAlerts = systemAlerts.filter(a => a.severity === 'warning').length;
+  const activeAlerts = systemAlerts.filter(a => a.severity === 'warning' || a.severity === 'critical').length;
 
   return (
     <div className="min-h-screen bg-background pb-8">
@@ -84,7 +142,7 @@ export default function AdminPanel() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{dataLoading ? '-' : allPonds.length}</p>
-                  <p className="text-xs text-muted-foreground">Ponds</p>
+                  <p className="text-xs text-muted-foreground">Total Ponds</p>
                 </div>
               </div>
             </CardContent>
@@ -97,8 +155,8 @@ export default function AdminPanel() {
                   <Bell className="h-5 w-5 text-status-warning" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{dataLoading ? '-' : warningAlerts}</p>
-                  <p className="text-xs text-muted-foreground">Alerts</p>
+                  <p className="text-2xl font-bold">{dataLoading ? '-' : activeAlerts}</p>
+                  <p className="text-xs text-muted-foreground">Active Alerts</p>
                 </div>
               </div>
             </CardContent>
@@ -119,18 +177,19 @@ export default function AdminPanel() {
           </Card>
         </div>
 
-        <Tabs defaultValue="devices" className="w-full">
+        <Tabs defaultValue="ponds" className="w-full">
           <TabsList className="mb-4">
-            <TabsTrigger value="devices">Devices</TabsTrigger>
+            <TabsTrigger value="ponds">All Ponds</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="logs">System Logs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="devices" className="mt-0">
+          <TabsContent value="ponds" className="mt-0">
             <Card variant="elevated">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">All Ponds & Devices</CardTitle>
+                  <CardTitle className="text-lg">Pond Management</CardTitle>
+                  <Badge variant="secondary">{allPonds.length} ponds</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -164,14 +223,25 @@ export default function AdminPanel() {
                             <p className="text-xs text-muted-foreground font-mono">{pond.ip}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right hidden sm:block">
+                        <div className="flex items-center gap-2">
+                          <div className="text-right hidden sm:block mr-2">
                             <p className="text-sm text-muted-foreground">Owner: {pond.userName}</p>
                           </div>
-                          <Badge variant="secondary">
-                            {pond.status}
-                          </Badge>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/admin/pond/${pond.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setDeletingPondId(pond.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -186,6 +256,7 @@ export default function AdminPanel() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">User Management</CardTitle>
+                  <Badge variant="secondary">{users.length} users</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -218,7 +289,7 @@ export default function AdminPanel() {
                             {u.role}
                           </Badge>
                           <span className="text-sm text-muted-foreground">
-                            {u.pondCount} ponds
+                            {u.pondCount} pond{u.pondCount !== 1 ? 's' : ''}
                           </span>
                           <ChevronRight className="h-4 w-4 text-muted-foreground" />
                         </div>
@@ -264,7 +335,15 @@ export default function AdminPanel() {
                             : 'border-l-primary bg-primary/5'
                         )}
                       >
-                        <p className="text-sm text-foreground">{log.message}</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-foreground">{log.message}</p>
+                          <Badge 
+                            variant={log.severity === 'critical' ? 'destructive' : 'secondary'}
+                            className="ml-2"
+                          >
+                            {log.severity}
+                          </Badge>
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">{log.time}</p>
                       </div>
                     ))}
@@ -275,6 +354,35 @@ export default function AdminPanel() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingPondId} onOpenChange={() => setDeletingPondId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Pond Access</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the pond and all associated data including sensor readings, alerts, and device configurations. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePond}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Removing...
+                </>
+              ) : (
+                'Remove Pond'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

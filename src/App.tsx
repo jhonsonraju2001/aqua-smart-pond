@@ -16,8 +16,10 @@ import Reports from "./pages/Reports";
 import PondAlerts from "./pages/PondAlerts";
 import Alerts from "./pages/Alerts";
 import AdminPanel from "./pages/AdminPanel";
+import AdminPondDetails from "./pages/AdminPondDetails";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 
 const queryClient = new QueryClient();
 
@@ -137,6 +139,14 @@ function AppRoutes() {
         } 
       />
       <Route 
+        path="/admin/pond/:pondId" 
+        element={
+          <ProtectedRoute>
+            <AdminPondDetails />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/profile" 
         element={
           <ProtectedRoute>
@@ -157,6 +167,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AppRoutes />
+          <OfflineIndicator />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
