@@ -73,14 +73,12 @@ export default function Settings() {
       title: 'Notifications',
       description: 'Configure alert preferences',
       path: '/settings/notifications',
-      disabled: true,
     },
     {
       icon: Shield,
       title: 'Security',
       description: 'Password and security settings',
       path: '/settings/security',
-      disabled: true,
     },
   ];
 
@@ -196,13 +194,9 @@ export default function Settings() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: (ponds.length + index) * 0.05 }}
                 >
-                  <Card 
-                    className={`cursor-pointer transition-all ${
-                      item.disabled 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:shadow-md hover:border-primary/20'
-                    }`}
-                    onClick={() => !item.disabled && navigate(item.path)}
+                <Card 
+                    className="cursor-pointer transition-all hover:shadow-md hover:border-primary/20"
+                    onClick={() => navigate(item.path)}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
