@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Bell, ChevronLeft, LogOut, Settings, User, Shield } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from './ThemeToggle';
 
 interface HeaderProps {
   title?: string;
@@ -61,7 +62,9 @@ export function Header({ title, showBack, alertCount = 0 }: HeaderProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          
           <Button
             variant="ghost"
             size="icon"
