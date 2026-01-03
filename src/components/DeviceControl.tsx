@@ -1,9 +1,8 @@
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Device } from '@/types/aquaculture';
-import { Wind, Droplets, Lightbulb, Bell, Zap } from 'lucide-react';
+import { Wind, Droplets, Lightbulb, Bell, Zap, Power } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const iconMap = {
   Wind: Wind,
@@ -22,50 +21,81 @@ interface DeviceControlProps {
 export function DeviceControl({ device, onToggle, onAutoChange, className }: DeviceControlProps) {
   const Icon = iconMap[device.icon as keyof typeof iconMap] || Wind;
 
-  const stateStyles = {
-    on: 'device-toggle-on',
-    off: 'device-toggle-off',
-    auto: 'device-toggle-auto',
-  };
-
-  const currentState = device.isAuto ? 'auto' : device.isOn ? 'on' : 'off';
-
   return (
-    <Card variant="device" className={cn('overflow-hidden animate-fade-in', className)}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
+    <Card className={cn('overflow-hidden border-0 shadow-lg', className)}>
+      <CardContent className="p-0">
+        <div className="flex flex-col">
+          {/* Main Control Area */}
+          <div className="p-5 flex items-center gap-4">
+            {/* Large Power Button */}
+            <motion.button
               onClick={() => onToggle(device.id)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               className={cn(
-                'h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-300 touch-button',
-                stateStyles[currentState]
+                'relative h-20 w-20 rounded-3xl flex items-center justify-center transition-all duration-300 shadow-xl',
+                device.isOn
+                  ? 'bg-gradient-to-br from-status-safe to-emerald-600'
+                  : 'bg-gradient-to-br from-muted to-muted/80'
               )}
+              style={{
+                boxShadow: device.isOn
+                  ? '0 10px 40px -10px hsl(var(--status-safe) / 0.5)'
+                  : '0 10px 30px -10px hsl(var(--muted-foreground) / 0.2)'
+              }}
             >
-              <Icon className="h-6 w-6 text-primary-foreground" />
-            </button>
-            <div>
-              <p className="font-semibold text-foreground">{device.name}</p>
-              <div className="flex items-center gap-2 mt-0.5">
+              {/* Animated ring when ON */}
+              {device.isOn && (
+                <motion.div
+                  className="absolute inset-0 rounded-3xl border-2 border-status-safe"
+                  initial={{ opacity: 0, scale: 1 }}
+                  animate={{ opacity: [0.5, 0], scale: [1, 1.2] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                />
+              )}
+              <Power className={cn(
+                'h-8 w-8 transition-colors',
+                device.isOn ? 'text-white' : 'text-muted-foreground'
+              )} />
+            </motion.button>
+
+            {/* Device Info */}
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <div className={cn(
+                  'h-8 w-8 rounded-xl flex items-center justify-center',
+                  device.isOn 
+                    ? 'bg-primary/10 text-primary' 
+                    : 'bg-muted text-muted-foreground'
+                )}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <h3 className="font-bold text-lg text-foreground">{device.name}</h3>
+              </div>
+              
+              <div className="flex items-center gap-2 mt-2">
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full',
+                    'inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full transition-colors',
                     device.isOn
-                      ? 'bg-status-safe/10 text-status-safe'
+                      ? 'bg-status-safe/15 text-status-safe'
                       : 'bg-muted text-muted-foreground'
                   )}
                 >
-                  <span
+                  <motion.span
                     className={cn(
-                      'h-1.5 w-1.5 rounded-full',
+                      'h-2 w-2 rounded-full',
                       device.isOn ? 'bg-status-safe' : 'bg-muted-foreground'
                     )}
+                    animate={device.isOn ? { scale: [1, 1.2, 1] } : {}}
+                    transition={{ duration: 1, repeat: Infinity }}
                   />
-                  {device.isOn ? 'ON' : 'OFF'}
+                  {device.isOn ? 'Running' : 'Stopped'}
                 </span>
+                
                 {device.isAuto && (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-device-auto/10 text-device-auto">
-                    <Zap className="h-3 w-3" />
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-device-auto/15 text-device-auto">
+                    <Zap className="h-3.5 w-3.5" />
                     AUTO
                   </span>
                 )}
@@ -73,33 +103,58 @@ export function DeviceControl({ device, onToggle, onAutoChange, className }: Dev
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
-            <Switch
-              checked={device.isOn}
-              onCheckedChange={() => onToggle(device.id)}
-              className="data-[state=checked]:bg-status-safe"
-            />
-            {device.autoCondition && (
-              <button
-                onClick={() => onAutoChange(device.id, !device.isAuto)}
-                className={cn(
-                  'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors',
-                  device.isAuto
-                    ? 'bg-device-auto/10 text-device-auto'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                )}
-              >
-                {device.isAuto ? 'Auto Mode' : 'Manual'}
-              </button>
-            )}
-          </div>
+          {/* Auto Mode Toggle Bar */}
+          {device.autoCondition && (
+            <div className={cn(
+              'px-5 py-3 border-t transition-colors',
+              device.isAuto ? 'bg-device-auto/5 border-device-auto/20' : 'bg-muted/30 border-border'
+            )}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Zap className={cn(
+                    'h-4 w-4',
+                    device.isAuto ? 'text-device-auto' : 'text-muted-foreground'
+                  )} />
+                  <span className="text-sm font-medium text-foreground">Auto Mode</span>
+                </div>
+                
+                <motion.button
+                  onClick={() => onAutoChange(device.id, !device.isAuto)}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={cn(
+                    'relative h-10 w-20 rounded-full transition-all duration-300 shadow-inner',
+                    device.isAuto
+                      ? 'bg-device-auto'
+                      : 'bg-muted'
+                  )}
+                >
+                  <motion.div
+                    className="absolute top-1 h-8 w-8 rounded-full bg-white shadow-md flex items-center justify-center"
+                    animate={{ left: device.isAuto ? 'calc(100% - 36px)' : '4px' }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  >
+                    {device.isAuto ? (
+                      <Zap className="h-4 w-4 text-device-auto" />
+                    ) : (
+                      <Power className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </motion.div>
+                </motion.button>
+              </div>
+              
+              {device.isAuto && (
+                <motion.p
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="text-xs text-muted-foreground mt-2 pl-6"
+                >
+                  Triggers: {device.autoCondition}
+                </motion.p>
+              )}
+            </div>
+          )}
         </div>
-        
-        {device.autoCondition && device.isAuto && (
-          <p className="text-xs text-muted-foreground mt-3 pl-[68px]">
-            Triggers: {device.autoCondition}
-          </p>
-        )}
       </CardContent>
     </Card>
   );

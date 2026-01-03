@@ -19,6 +19,8 @@ import Alerts from "./pages/Alerts";
 import AdminPanel from "./pages/AdminPanel";
 import AdminPondDetails from "./pages/AdminPondDetails";
 import Profile from "./pages/Profile";
+import Notifications from "./pages/Notifications";
+import Security from "./pages/Security";
 import NotFound from "./pages/NotFound";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 
@@ -128,6 +130,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ThresholdSettings />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/settings/notifications" 
+        element={
+          <ProtectedRoute>
+            <Notifications />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/settings/security" 
+        element={
+          <ProtectedRoute>
+            <Security />
           </ProtectedRoute>
         } 
       />
