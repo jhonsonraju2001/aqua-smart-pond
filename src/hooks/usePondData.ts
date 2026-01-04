@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { ref, onValue, off } from 'firebase/database';
+import { database } from '@/lib/firebase';
 import { supabase } from '@/integrations/supabase/client';
 import { Pond, SensorData, Device, Alert } from '@/types/aquaculture';
 
-// Generate sensor data - will be replaced with real data later
-const generateSensorData = (pondId: string): SensorData => {
+// Fallback mock data generator for when Firebase is unavailable
+const generateFallbackSensorData = (pondId: string): SensorData => {
   const baseValues = {
     'pond-1': { ph: 7.2, do: 6.5, temp: 28 },
     'pond-2': { ph: 6.8, do: 4.2, temp: 30 },
@@ -62,10 +64,14 @@ const getDevicesForPond = (pondId: string, sensorData: SensorData): Device[] => 
   ];
 };
 
+// Heartbeat timeout in milliseconds (60 seconds)
+const HEARTBEAT_TIMEOUT_MS = 60000;
+
 export function usePondData() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pondStatuses, setPondStatuses] = useState<Record<string, { isOnline: boolean; lastSeen: Date | null }>>({});
 
   const fetchPonds = useCallback(async () => {
     try {
@@ -86,8 +92,8 @@ export function usePondData() {
         name: pond.name,
         ipAddress: pond.device_ip,
         location: pond.location || undefined,
-        status: 'online' as const,
-        lastUpdated: new Date(pond.updated_at),
+        status: pondStatuses[pond.id]?.isOnline ? 'online' : 'offline',
+        lastUpdated: pondStatuses[pond.id]?.lastSeen || new Date(pond.updated_at),
       }));
 
       setPonds(mappedPonds);
@@ -97,11 +103,66 @@ export function usePondData() {
     } finally {
       setIsLoading(false);
     }
+  }, [pondStatuses]);
+
+  // Subscribe to Firebase lastSeen for all ponds
+  useEffect(() => {
+    if (!database) return;
+
+    const pondsRef = ref(database, 'ponds');
+    
+    const handleValue = (snapshot: any) => {
+      const data = snapshot.val();
+      if (data) {
+        const statuses: Record<string, { isOnline: boolean; lastSeen: Date | null }> = {};
+        Object.keys(data).forEach(pondKey => {
+          const lastSeenTs = data[pondKey]?.lastSeen;
+          if (lastSeenTs) {
+            const lastSeenDate = new Date(lastSeenTs);
+            const timeSinceLastSeen = Date.now() - lastSeenDate.getTime();
+            statuses[pondKey] = {
+              isOnline: timeSinceLastSeen < HEARTBEAT_TIMEOUT_MS,
+              lastSeen: lastSeenDate,
+            };
+          }
+        });
+        setPondStatuses(statuses);
+      }
+    };
+
+    onValue(pondsRef, handleValue, (err) => {
+      console.error('Firebase pond status error:', err);
+    });
+
+    return () => {
+      off(pondsRef);
+    };
   }, []);
 
   useEffect(() => {
     fetchPonds();
   }, [fetchPonds]);
+
+  // Update pond statuses periodically
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setPondStatuses(prev => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(pondId => {
+          if (updated[pondId].lastSeen) {
+            const timeSinceLastSeen = Date.now() - updated[pondId].lastSeen!.getTime();
+            updated[pondId] = {
+              ...updated[pondId],
+              isOnline: timeSinceLastSeen < HEARTBEAT_TIMEOUT_MS,
+            };
+          }
+        });
+        return updated;
+      });
+    }, 10000);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   return { ponds, isLoading, error, refetch: fetchPonds };
 }
@@ -111,20 +172,88 @@ export function useSensorData(pondId: string, refreshInterval = 5000) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [firebaseConnected, setFirebaseConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const refreshData = useCallback(() => {
-    const newData = generateSensorData(pondId);
-    setSensorData(newData);
-    setDevices(getDevicesForPond(pondId, newData));
-    setLastUpdated(new Date());
-    setIsLoading(false);
-  }, [pondId]);
+  // Map pondId to Firebase path (handle both formats)
+  const firebasePondId = pondId.startsWith('pond') ? pondId : `pond${pondId.replace(/[^0-9]/g, '') || '1'}`;
 
+  // Subscribe to Firebase realtime sensor data
   useEffect(() => {
+    if (!database) {
+      console.warn('Firebase database not initialized, using fallback data');
+      setFirebaseConnected(false);
+      return;
+    }
+
+    const sensorsRef = ref(database, `ponds/${firebasePondId}/sensors`);
+
+    const handleValue = (snapshot: any) => {
+      try {
+        const data = snapshot.val();
+        if (data) {
+          const newSensorData: SensorData = {
+            ph: data.ph ?? data.pH ?? 0,
+            dissolvedOxygen: data.dissolvedOxygen ?? data.do ?? data.DO ?? 0,
+            temperature: data.temperature ?? data.temp ?? 0,
+            timestamp: new Date(),
+          };
+          setSensorData(newSensorData);
+          setDevices(getDevicesForPond(pondId, newSensorData));
+          setLastUpdated(new Date());
+          setFirebaseConnected(true);
+          setError(null);
+        }
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error parsing Firebase sensor data:', err);
+        setError('Failed to parse sensor data');
+        setFirebaseConnected(false);
+      }
+    };
+
+    const handleError = (err: Error) => {
+      console.error('Firebase sensor read error:', err);
+      setError('Failed to connect to sensor data');
+      setFirebaseConnected(false);
+      setIsLoading(false);
+    };
+
+    onValue(sensorsRef, handleValue, handleError);
+
+    return () => {
+      off(sensorsRef);
+    };
+  }, [pondId, firebasePondId]);
+
+  // Fallback to mock data if Firebase not connected
+  useEffect(() => {
+    if (firebaseConnected) return;
+
+    const refreshData = () => {
+      const newData = generateFallbackSensorData(pondId);
+      setSensorData(newData);
+      setDevices(getDevicesForPond(pondId, newData));
+      setLastUpdated(new Date());
+      setIsLoading(false);
+    };
+
     refreshData();
     const interval = setInterval(refreshData, refreshInterval);
     return () => clearInterval(interval);
-  }, [refreshData, refreshInterval]);
+  }, [pondId, refreshInterval, firebaseConnected]);
+
+  const refreshData = useCallback(() => {
+    // For Firebase, data is realtime so just update timestamp
+    if (firebaseConnected) {
+      setLastUpdated(new Date());
+    } else {
+      const newData = generateFallbackSensorData(pondId);
+      setSensorData(newData);
+      setDevices(getDevicesForPond(pondId, newData));
+      setLastUpdated(new Date());
+    }
+  }, [pondId, firebaseConnected]);
 
   const toggleDevice = (deviceId: string) => {
     setDevices(prev => 
@@ -146,13 +275,72 @@ export function useSensorData(pondId: string, refreshInterval = 5000) {
     );
   };
 
-  return { sensorData, devices, isLoading, lastUpdated, refreshData, toggleDevice, setDeviceAuto };
+  return { sensorData, devices, isLoading, lastUpdated, refreshData, toggleDevice, setDeviceAuto, error, firebaseConnected };
 }
 
-export function useAlerts() {
+export function useAlerts(pondIdFilter?: string) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [firebaseAlerts, setFirebaseAlerts] = useState<Alert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [firebaseConnected, setFirebaseConnected] = useState(false);
 
+  // Map pondId to Firebase path
+  const firebasePondId = pondIdFilter 
+    ? (pondIdFilter.startsWith('pond') ? pondIdFilter : `pond${pondIdFilter.replace(/[^0-9]/g, '') || '1'}`)
+    : 'pond1';
+
+  // Subscribe to Firebase realtime alerts
+  useEffect(() => {
+    if (!database) {
+      setFirebaseConnected(false);
+      return;
+    }
+
+    const alertsRef = ref(database, `ponds/${firebasePondId}/alerts`);
+
+    const handleValue = (snapshot: any) => {
+      try {
+        const data = snapshot.val();
+        if (data) {
+          const alertsList: Alert[] = Object.entries(data).map(([key, value]: [string, any]) => ({
+            id: key,
+            pondId: pondIdFilter || firebasePondId,
+            pondName: value.pondName || 'Pond 1',
+            type: (value.type || 'sensor') as Alert['type'],
+            message: value.message || 'Alert triggered',
+            severity: (value.severity || 'warning') as Alert['severity'],
+            timestamp: new Date(value.timestamp || Date.now()),
+            acknowledged: value.acknowledged || false,
+          }));
+          
+          // Sort by timestamp, newest first
+          alertsList.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+          setFirebaseAlerts(alertsList);
+          setFirebaseConnected(true);
+        } else {
+          setFirebaseAlerts([]);
+        }
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error parsing Firebase alerts:', err);
+        setFirebaseConnected(false);
+      }
+    };
+
+    const handleError = (err: Error) => {
+      console.error('Firebase alerts error:', err);
+      setFirebaseConnected(false);
+      setIsLoading(false);
+    };
+
+    onValue(alertsRef, handleValue, handleError);
+
+    return () => {
+      off(alertsRef);
+    };
+  }, [pondIdFilter, firebasePondId]);
+
+  // Also fetch from Supabase for persistence
   const fetchAlerts = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -189,7 +377,24 @@ export function useAlerts() {
     fetchAlerts();
   }, [fetchAlerts]);
 
+  // Combine Firebase and Supabase alerts, preferring Firebase for realtime
+  const combinedAlerts = firebaseConnected ? [...firebaseAlerts, ...alerts.filter(a => 
+    !firebaseAlerts.some(fa => fa.id === a.id)
+  )] : alerts;
+
   const acknowledgeAlert = async (alertId: string) => {
+    // Update Firebase alert if connected
+    if (database && firebaseConnected) {
+      try {
+        const { update } = await import('firebase/database');
+        const alertRef = ref(database, `ponds/${firebasePondId}/alerts/${alertId}`);
+        await update(alertRef, { acknowledged: true });
+      } catch (err) {
+        console.error('Error acknowledging Firebase alert:', err);
+      }
+    }
+
+    // Also update Supabase
     try {
       const { error } = await supabase
         .from('alerts')
@@ -210,7 +415,7 @@ export function useAlerts() {
     }
   };
 
-  return { alerts, isLoading, acknowledgeAlert, refetch: fetchAlerts };
+  return { alerts: combinedAlerts, isLoading, acknowledgeAlert, refetch: fetchAlerts, firebaseConnected };
 }
 
 // Admin hooks for fetching all data
