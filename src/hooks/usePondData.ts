@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ref, onValue, off } from 'firebase/database';
+import { ref, onValue, off, update } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { supabase } from '@/integrations/supabase/client';
 import { Pond, SensorData, Device, Alert } from '@/types/aquaculture';
+import { useFirebaseDevices } from './useFirebaseDevices';
 
 // Fallback mock data generator for when Firebase is unavailable
 const generateFallbackSensorData = (pondId: string): SensorData => {
@@ -169,11 +170,20 @@ export function usePondData() {
 
 export function useSensorData(pondId: string, refreshInterval = 5000) {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
-  const [devices, setDevices] = useState<Device[]>([]);
+  const [localDevices, setLocalDevices] = useState<Device[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [firebaseConnected, setFirebaseConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Use Firebase devices hook for real-time device control
+  const { 
+    devices: firebaseDevices, 
+    isLoading: devicesLoading,
+    firebaseConnected: devicesFirebaseConnected,
+    toggleDevice: firebaseToggleDevice,
+    setDeviceAuto: firebaseSetDeviceAuto,
+  } = useFirebaseDevices(pondId);
 
   // Map pondId to Firebase path (handle both formats)
   const firebasePondId = pondId.startsWith('pond') ? pondId : `pond${pondId.replace(/[^0-9]/g, '') || '1'}`;
@@ -199,7 +209,10 @@ export function useSensorData(pondId: string, refreshInterval = 5000) {
             timestamp: new Date(),
           };
           setSensorData(newSensorData);
-          setDevices(getDevicesForPond(pondId, newSensorData));
+          // Only use local devices as fallback if Firebase devices not connected
+          if (!devicesFirebaseConnected) {
+            setLocalDevices(getDevicesForPond(pondId, newSensorData));
+          }
           setLastUpdated(new Date());
           setFirebaseConnected(true);
           setError(null);
@@ -224,7 +237,7 @@ export function useSensorData(pondId: string, refreshInterval = 5000) {
     return () => {
       off(sensorsRef);
     };
-  }, [pondId, firebasePondId]);
+  }, [pondId, firebasePondId, devicesFirebaseConnected]);
 
   // Fallback to mock data if Firebase not connected
   useEffect(() => {
@@ -233,7 +246,9 @@ export function useSensorData(pondId: string, refreshInterval = 5000) {
     const refreshData = () => {
       const newData = generateFallbackSensorData(pondId);
       setSensorData(newData);
-      setDevices(getDevicesForPond(pondId, newData));
+      if (!devicesFirebaseConnected) {
+        setLocalDevices(getDevicesForPond(pondId, newData));
+      }
       setLastUpdated(new Date());
       setIsLoading(false);
     };
@@ -241,7 +256,7 @@ export function useSensorData(pondId: string, refreshInterval = 5000) {
     refreshData();
     const interval = setInterval(refreshData, refreshInterval);
     return () => clearInterval(interval);
-  }, [pondId, refreshInterval, firebaseConnected]);
+  }, [pondId, refreshInterval, firebaseConnected, devicesFirebaseConnected]);
 
   const refreshData = useCallback(() => {
     // For Firebase, data is realtime so just update timestamp
@@ -250,32 +265,59 @@ export function useSensorData(pondId: string, refreshInterval = 5000) {
     } else {
       const newData = generateFallbackSensorData(pondId);
       setSensorData(newData);
-      setDevices(getDevicesForPond(pondId, newData));
+      if (!devicesFirebaseConnected) {
+        setLocalDevices(getDevicesForPond(pondId, newData));
+      }
       setLastUpdated(new Date());
     }
-  }, [pondId, firebaseConnected]);
+  }, [pondId, firebaseConnected, devicesFirebaseConnected]);
 
-  const toggleDevice = (deviceId: string) => {
-    setDevices(prev => 
-      prev.map(d => 
-        d.id === deviceId 
-          ? { ...d, isOn: !d.isOn, isAuto: false }
-          : d
-      )
-    );
+  // Use Firebase devices if connected, otherwise use local fallback
+  const devices = devicesFirebaseConnected && firebaseDevices.length > 0 
+    ? firebaseDevices 
+    : localDevices;
+
+  // Toggle device - use Firebase if connected
+  const toggleDevice = useCallback((deviceId: string) => {
+    if (devicesFirebaseConnected) {
+      firebaseToggleDevice(deviceId);
+    } else {
+      setLocalDevices(prev => 
+        prev.map(d => 
+          d.id === deviceId 
+            ? { ...d, isOn: !d.isOn, isAuto: false }
+            : d
+        )
+      );
+    }
+  }, [devicesFirebaseConnected, firebaseToggleDevice]);
+
+  // Set device auto mode - use Firebase if connected
+  const setDeviceAuto = useCallback((deviceId: string, isAuto: boolean) => {
+    if (devicesFirebaseConnected) {
+      firebaseSetDeviceAuto(deviceId, isAuto);
+    } else {
+      setLocalDevices(prev =>
+        prev.map(d =>
+          d.id === deviceId
+            ? { ...d, isAuto }
+            : d
+        )
+      );
+    }
+  }, [devicesFirebaseConnected, firebaseSetDeviceAuto]);
+
+  return { 
+    sensorData, 
+    devices, 
+    isLoading: isLoading || devicesLoading, 
+    lastUpdated, 
+    refreshData, 
+    toggleDevice, 
+    setDeviceAuto, 
+    error, 
+    firebaseConnected: firebaseConnected || devicesFirebaseConnected 
   };
-
-  const setDeviceAuto = (deviceId: string, isAuto: boolean) => {
-    setDevices(prev =>
-      prev.map(d =>
-        d.id === deviceId
-          ? { ...d, isAuto }
-          : d
-      )
-    );
-  };
-
-  return { sensorData, devices, isLoading, lastUpdated, refreshData, toggleDevice, setDeviceAuto, error, firebaseConnected };
 }
 
 export function useAlerts(pondIdFilter?: string) {
