@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { usePondData, useAlerts } from '@/hooks/usePondData';
+import { useFirebasePondStatus } from '@/hooks/useFirebasePondStatus';
 import { Header } from '@/components/Header';
 import { ActionButton } from '@/components/ActionButton';
 import { Card, CardContent } from '@/components/ui/card';
@@ -24,6 +25,13 @@ export default function PondHome() {
 
   const pond = ponds.find(p => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
   const activePondId = pond?.id || pondId || '';
+  
+  // Use Firebase pond status for realtime online/offline detection
+  const firebasePondId = activePondId.startsWith('pond') 
+    ? activePondId 
+    : `pond${activePondId.replace(/[^0-9]/g, '') || '1'}`;
+  const { isOnline: firebaseIsOnline, lastSeen, connectionError } = useFirebasePondStatus(firebasePondId);
+  
   const pondAlerts = alerts.filter(a => a.pondId === activePondId && !a.acknowledged);
 
   if (pondsLoading) {
@@ -45,7 +53,8 @@ export default function PondHome() {
     );
   }
 
-  const isOnline = pond.status !== 'offline';
+  // Use Firebase status if available, fallback to pond.status
+  const isOnline = connectionError ? pond.status !== 'offline' : firebaseIsOnline;
 
   return (
     <div className="min-h-screen bg-background pb-8">
