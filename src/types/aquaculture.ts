@@ -2,6 +2,7 @@ export interface SensorData {
   ph: number;
   dissolvedOxygen: number;
   temperature: number;
+  turbidity?: number;
   timestamp: Date;
 }
 
@@ -17,7 +18,7 @@ export interface SensorStatus {
 export interface Device {
   id: string;
   name: string;
-  type: 'aerator' | 'pump' | 'lights' | 'buzzer';
+  type: string;
   isOn: boolean;
   isAuto: boolean;
   icon: string;
