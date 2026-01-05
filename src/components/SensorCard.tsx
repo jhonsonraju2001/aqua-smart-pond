@@ -7,7 +7,7 @@ import { useSensorAlerts } from '@/hooks/useSensorAlerts';
 import { Sparkline } from './sensors/Sparkline';
 
 interface SensorCardProps {
-  type: 'ph' | 'do' | 'temperature';
+  type: 'ph' | 'do' | 'temperature' | 'turbidity';
   value: number;
   history?: number[];
   className?: string;
@@ -50,6 +50,19 @@ const sensorConfig = {
     getStatus: (value: number): 'safe' | 'warning' | 'critical' => {
       if (value >= 24 && value <= 32) return 'safe';
       if (value >= 20 && value <= 35) return 'warning';
+      return 'critical';
+    },
+  },
+  turbidity: {
+    label: 'Turbidity',
+    unit: 'NTU',
+    icon: Droplets,
+    min: 0,
+    max: 50,
+    decimals: 1,
+    getStatus: (value: number): 'safe' | 'warning' | 'critical' => {
+      if (value <= 25) return 'safe';
+      if (value <= 40) return 'warning';
       return 'critical';
     },
   },

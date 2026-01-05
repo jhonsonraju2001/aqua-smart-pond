@@ -2,6 +2,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSensorData } from '@/hooks/usePondData';
+import { useFirebaseAlerts } from '@/hooks/useFirebaseAlerts';
+import { useFirebasePondStatus } from '@/hooks/useFirebasePondStatus';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +19,7 @@ import {
   User,
   MapPin,
   Wifi,
+  WifiOff,
   AlertTriangle,
   Activity
 } from 'lucide-react';
@@ -36,30 +40,6 @@ interface OwnerProfile {
   created_at: string;
 }
 
-interface DeviceInfo {
-  id: string;
-  name: string;
-  type: string;
-  is_on: boolean;
-  auto_mode: boolean;
-}
-
-interface AlertInfo {
-  id: string;
-  type: string;
-  severity: string;
-  message: string;
-  triggered_at: string;
-  is_active: boolean;
-}
-
-interface SensorReading {
-  ph: number;
-  dissolved_oxygen: number;
-  temperature: number;
-  recorded_at: string;
-}
-
 export default function AdminPondDetails() {
   const { pondId } = useParams<{ pondId: string }>();
   const { isAdmin, isLoading: authLoading } = useAuth();
@@ -67,10 +47,23 @@ export default function AdminPondDetails() {
   
   const [pond, setPond] = useState<PondDetails | null>(null);
   const [owner, setOwner] = useState<OwnerProfile | null>(null);
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [alerts, setAlerts] = useState<AlertInfo[]>([]);
-  const [sensorData, setSensorData] = useState<SensorReading | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Use Firebase hooks for real-time data with readOnly=true for admin
+  const { 
+    sensorData, 
+    devices, 
+    isLoading: sensorLoading, 
+    lastUpdated,
+    firebaseConnected 
+  } = useSensorData(pondId || 'pond1', true); // readOnly = true for admin
+
+  const { 
+    alerts: firebaseAlerts, 
+    isLoading: alertsLoading,
+  } = useFirebaseAlerts(pondId || 'pond1');
+
+  const pondStatus = useFirebasePondStatus(pondId || 'pond1');
 
   const fetchPondDetails = useCallback(async () => {
     if (!pondId) return;
@@ -101,35 +94,6 @@ export default function AdminPondDetails() {
         .maybeSingle();
 
       setOwner(profileData);
-
-      // Fetch devices
-      const { data: devicesData } = await supabase
-        .from('devices')
-        .select('*')
-        .eq('pond_id', pondId);
-
-      setDevices(devicesData || []);
-
-      // Fetch alerts
-      const { data: alertsData } = await supabase
-        .from('alerts')
-        .select('*')
-        .eq('pond_id', pondId)
-        .order('triggered_at', { ascending: false })
-        .limit(20);
-
-      setAlerts(alertsData || []);
-
-      // Fetch latest sensor reading
-      const { data: sensorReadingData } = await supabase
-        .from('sensor_readings')
-        .select('*')
-        .eq('pond_id', pondId)
-        .order('recorded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      setSensorData(sensorReadingData);
 
     } catch (error) {
       console.error('Error fetching pond details:', error);
@@ -166,21 +130,15 @@ export default function AdminPondDetails() {
   }
 
   const getDeviceIcon = (type: string) => {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'aerator': return Wind;
-      case 'pump': return Droplets;
-      case 'lights': return Lightbulb;
+      case 'pump': 
+      case 'motor': return Droplets;
+      case 'lights':
+      case 'light': return Lightbulb;
       case 'buzzer': return Bell;
       default: return Activity;
     }
-  };
-
-  // Generate mock sensor data if no real data
-  const displaySensorData = sensorData || {
-    ph: 7.2 + (Math.random() - 0.5) * 0.4,
-    dissolved_oxygen: 6.5 + (Math.random() - 0.5) * 0.8,
-    temperature: 28 + (Math.random() - 0.5) * 2,
-    recorded_at: new Date().toISOString(),
   };
 
   return (
@@ -194,7 +152,11 @@ export default function AdminPondDetails() {
             <div className="flex items-start justify-between">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Wifi className="h-4 w-4 text-status-safe" />
+                  {pondStatus.isOnline ? (
+                    <Wifi className="h-4 w-4 text-status-safe" />
+                  ) : (
+                    <WifiOff className="h-4 w-4 text-status-warning" />
+                  )}
                   <span className="text-sm font-mono">{pond.device_ip}</span>
                 </div>
                 {pond.location && (
@@ -204,8 +166,15 @@ export default function AdminPondDetails() {
                   </div>
                 )}
               </div>
-              <Badge variant="secondary" className="bg-status-safe/10 text-status-safe">
-                Online
+              <Badge 
+                variant="secondary" 
+                className={cn(
+                  pondStatus.isOnline 
+                    ? 'bg-status-safe/10 text-status-safe' 
+                    : 'bg-status-warning/10 text-status-warning'
+                )}
+              >
+                {pondStatus.isOnline ? 'Online' : 'Offline'}
               </Badge>
             </div>
           </CardContent>
@@ -242,26 +211,43 @@ export default function AdminPondDetails() {
           </TabsList>
 
           <TabsContent value="sensors" className="mt-0">
-            <div className="grid gap-4">
-              <SensorCard
-                type="ph"
-                value={+displaySensorData.ph.toFixed(2)}
-              />
-              <SensorCard
-                type="do"
-                value={+displaySensorData.dissolved_oxygen.toFixed(2)}
-              />
-              <SensorCard
-                type="temperature"
-                value={+displaySensorData.temperature.toFixed(1)}
-              />
-            </div>
+            {sensorLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : sensorData ? (
+              <div className="grid gap-4">
+                <SensorCard
+                  type="ph"
+                  value={+sensorData.ph.toFixed(2)}
+                />
+                <SensorCard
+                  type="do"
+                  value={+sensorData.dissolvedOxygen.toFixed(2)}
+                />
+                <SensorCard
+                  type="temperature"
+                  value={+sensorData.temperature.toFixed(1)}
+                />
+                {sensorData.turbidity !== undefined && (
+                  <SensorCard
+                    type="turbidity"
+                    value={+sensorData.turbidity.toFixed(1)}
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                No sensor data available
+              </div>
+            )}
             <p className="text-xs text-muted-foreground text-center mt-4">
-              Read-only view • Last updated: {new Date(displaySensorData.recorded_at).toLocaleTimeString()}
+              Read-only view • {firebaseConnected ? 'Live data from Firebase' : 'Using cached data'} 
+              {lastUpdated && ` • Last updated: ${lastUpdated.toLocaleTimeString()}`}
             </p>
           </TabsContent>
 
-          {/* Devices Tab */}
+          {/* Devices Tab - Read Only */}
           <TabsContent value="devices" className="mt-0">
             <Card variant="elevated">
               <CardContent className="p-4">
@@ -281,11 +267,11 @@ export default function AdminPondDetails() {
                           <div className="flex items-center gap-3">
                             <div className={cn(
                               'h-10 w-10 rounded-xl flex items-center justify-center',
-                              device.is_on ? 'bg-status-safe/10' : 'bg-muted'
+                              device.isOn ? 'bg-status-safe/10' : 'bg-muted'
                             )}>
                               <Icon className={cn(
                                 'h-5 w-5',
-                                device.is_on ? 'text-status-safe' : 'text-muted-foreground'
+                                device.isOn ? 'text-status-safe' : 'text-muted-foreground'
                               )} />
                             </div>
                             <div>
@@ -294,11 +280,11 @@ export default function AdminPondDetails() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {device.auto_mode && (
+                            {device.isAuto && (
                               <Badge variant="secondary" className="text-xs">AUTO</Badge>
                             )}
-                            <Badge variant={device.is_on ? 'default' : 'secondary'}>
-                              {device.is_on ? 'ON' : 'OFF'}
+                            <Badge variant={device.isOn ? 'default' : 'secondary'}>
+                              {device.isOn ? 'ON' : 'OFF'}
                             </Badge>
                           </div>
                         </div>
@@ -317,13 +303,17 @@ export default function AdminPondDetails() {
           <TabsContent value="alerts" className="mt-0">
             <Card variant="elevated">
               <CardContent className="p-4">
-                {alerts.length === 0 ? (
+                {alertsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : firebaseAlerts.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     No alerts for this pond
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {alerts.map(alert => (
+                    {firebaseAlerts.map(alert => (
                       <div
                         key={alert.id}
                         className={cn(
@@ -345,13 +335,13 @@ export default function AdminPondDetails() {
                             <p className="text-sm font-medium">{alert.message}</p>
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-xs text-muted-foreground">
-                                {new Date(alert.triggered_at).toLocaleString()}
+                                {new Date(alert.timestamp).toLocaleString()}
                               </span>
                               <Badge 
-                                variant={alert.is_active ? 'destructive' : 'secondary'}
+                                variant={!alert.acknowledged ? 'destructive' : 'secondary'}
                                 className="text-xs"
                               >
-                                {alert.is_active ? 'Active' : 'Resolved'}
+                                {!alert.acknowledged ? 'Active' : 'Acknowledged'}
                               </Badge>
                             </div>
                           </div>
