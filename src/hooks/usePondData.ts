@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ref, onValue, off } from 'firebase/database';
-import { database } from '@/lib/firebase';
 import { supabase } from '@/integrations/supabase/client';
 import { Pond, SensorData, Device, Alert } from '@/types/aquaculture';
 import { useFirebaseDevices } from './useFirebaseDevices';
@@ -8,14 +6,12 @@ import { useFirebaseSensors } from './useFirebaseSensors';
 import { useFirebaseAlerts } from './useFirebaseAlerts';
 import { useFirebasePondStatus } from './useFirebasePondStatus';
 
-// Heartbeat timeout in milliseconds (60 seconds)
-const HEARTBEAT_TIMEOUT_MS = 60000;
-
 export function usePondData() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pondStatuses, setPondStatuses] = useState<Record<string, { isOnline: boolean; lastSeen: Date | null }>>({});
+  
+  const pondStatus = useFirebasePondStatus();
 
   const fetchPonds = useCallback(async () => {
     try {
@@ -36,8 +32,8 @@ export function usePondData() {
         name: pond.name,
         ipAddress: pond.device_ip,
         location: pond.location || undefined,
-        status: pondStatuses[pond.id]?.isOnline ? 'online' : 'offline',
-        lastUpdated: pondStatuses[pond.id]?.lastSeen || new Date(pond.updated_at),
+        status: pondStatus.isOnline ? 'online' : 'offline',
+        lastUpdated: pondStatus.lastSeen || new Date(pond.updated_at),
       }));
 
       setPonds(mappedPonds);
@@ -47,82 +43,24 @@ export function usePondData() {
     } finally {
       setIsLoading(false);
     }
-  }, [pondStatuses]);
-
-  // Subscribe to Firebase lastSeen for all ponds
-  useEffect(() => {
-    if (!database) return;
-
-    const pondsRef = ref(database, 'ponds');
-    
-    const handleValue = (snapshot: any) => {
-      const data = snapshot.val();
-      if (data) {
-        const statuses: Record<string, { isOnline: boolean; lastSeen: Date | null }> = {};
-        Object.keys(data).forEach(pondKey => {
-          const lastSeenTs = data[pondKey]?.lastSeen;
-          if (lastSeenTs) {
-            const lastSeenDate = new Date(lastSeenTs);
-            const timeSinceLastSeen = Date.now() - lastSeenDate.getTime();
-            statuses[pondKey] = {
-              isOnline: timeSinceLastSeen < HEARTBEAT_TIMEOUT_MS,
-              lastSeen: lastSeenDate,
-            };
-          }
-        });
-        setPondStatuses(statuses);
-      }
-    };
-
-    onValue(pondsRef, handleValue, (err) => {
-      console.error('Firebase pond status error:', err);
-    });
-
-    return () => {
-      off(pondsRef);
-    };
-  }, []);
+  }, [pondStatus.isOnline, pondStatus.lastSeen]);
 
   useEffect(() => {
     fetchPonds();
   }, [fetchPonds]);
 
-  // Update pond statuses periodically
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setPondStatuses(prev => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(pondId => {
-          if (updated[pondId].lastSeen) {
-            const timeSinceLastSeen = Date.now() - updated[pondId].lastSeen!.getTime();
-            updated[pondId] = {
-              ...updated[pondId],
-              isOnline: timeSinceLastSeen < HEARTBEAT_TIMEOUT_MS,
-            };
-          }
-        });
-        return updated;
-      });
-    }, 10000);
-
-    return () => clearInterval(intervalId);
-  }, []);
-
   return { ponds, isLoading, error, refetch: fetchPonds };
 }
 
-export function useSensorData(pondId: string, readOnly: boolean = false) {
-  // Map pondId to Firebase path (handle both formats)
-  const firebasePondId = pondId.startsWith('pond') ? pondId : `pond${pondId.replace(/[^0-9]/g, '') || '1'}`;
-
-  // Use Firebase sensor hook
+export function useSensorData(pondId: string = '', readOnly: boolean = false) {
+  // Use Firebase sensor hook - single aquaculture system
   const { 
     sensorData: firebaseSensorData, 
     isLoading: sensorsLoading, 
     error: sensorsError, 
     lastUpdated,
     firebaseConnected: sensorsConnected,
-  } = useFirebaseSensors(firebasePondId);
+  } = useFirebaseSensors();
 
   // Use Firebase devices hook with readOnly support
   const { 
@@ -132,19 +70,17 @@ export function useSensorData(pondId: string, readOnly: boolean = false) {
     firebaseConnected: devicesConnected,
     toggleDevice,
     setDeviceAuto,
-  } = useFirebaseDevices(firebasePondId, readOnly);
+  } = useFirebaseDevices(readOnly);
 
   // Convert Firebase sensor data to app format
   const sensorData: SensorData | null = firebaseSensorData ? {
     ph: firebaseSensorData.ph,
-    dissolvedOxygen: firebaseSensorData.dissolvedOxygen,
+    dissolvedOxygen: firebaseSensorData.do,
     temperature: firebaseSensorData.temperature,
-    turbidity: firebaseSensorData.turbidity,
     timestamp: lastUpdated || new Date(),
   } : null;
 
   const refreshData = useCallback(() => {
-    // For Firebase, data is realtime - just log refresh request
     console.log('Refresh requested - Firebase provides realtime updates');
   }, []);
 
@@ -162,143 +98,29 @@ export function useSensorData(pondId: string, readOnly: boolean = false) {
 }
 
 export function useAlerts(pondIdFilter?: string) {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [firebaseAlerts, setFirebaseAlerts] = useState<Alert[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [firebaseConnected, setFirebaseConnected] = useState(false);
+  const { 
+    alerts: firebaseAlerts, 
+    isLoading, 
+    error, 
+    firebaseConnected,
+    acknowledgeAlert: fbAcknowledgeAlert,
+  } = useFirebaseAlerts();
 
-  // Map pondId to Firebase path
-  const firebasePondId = pondIdFilter 
-    ? (pondIdFilter.startsWith('pond') ? pondIdFilter : `pond${pondIdFilter.replace(/[^0-9]/g, '') || '1'}`)
-    : 'pond1';
-
-  // Subscribe to Firebase realtime alerts
-  useEffect(() => {
-    if (!database) {
-      setFirebaseConnected(false);
-      return;
-    }
-
-    const alertsRef = ref(database, `ponds/${firebasePondId}/alerts`);
-
-    const handleValue = (snapshot: any) => {
-      try {
-        const data = snapshot.val();
-        if (data) {
-          const alertsList: Alert[] = Object.entries(data).map(([key, value]: [string, any]) => ({
-            id: key,
-            pondId: pondIdFilter || firebasePondId,
-            pondName: value.pondName || 'Pond 1',
-            type: (value.type || 'sensor') as Alert['type'],
-            message: value.message || 'Alert triggered',
-            severity: (value.severity || 'warning') as Alert['severity'],
-            timestamp: new Date(value.timestamp || Date.now()),
-            acknowledged: value.acknowledged || false,
-          }));
-          
-          // Sort by timestamp, newest first
-          alertsList.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-          setFirebaseAlerts(alertsList);
-          setFirebaseConnected(true);
-        } else {
-          setFirebaseAlerts([]);
-        }
-        setIsLoading(false);
-      } catch (err) {
-        console.error('Error parsing Firebase alerts:', err);
-        setFirebaseConnected(false);
-      }
-    };
-
-    const handleError = (err: Error) => {
-      console.error('Firebase alerts error:', err);
-      setFirebaseConnected(false);
-      setIsLoading(false);
-    };
-
-    onValue(alertsRef, handleValue, handleError);
-
-    return () => {
-      off(alertsRef);
-    };
-  }, [pondIdFilter, firebasePondId]);
-
-  // Also fetch from Supabase for persistence
-  const fetchAlerts = useCallback(async () => {
+  const acknowledgeAlert = useCallback(async (alertId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('alerts')
-        .select(`
-          *,
-          ponds(name)
-        `)
-        .eq('is_active', true)
-        .order('triggered_at', { ascending: false });
-
-      if (error) throw error;
-
-      const mappedAlerts: Alert[] = (data || []).map(alert => ({
-        id: alert.id,
-        pondId: alert.pond_id,
-        pondName: (alert.ponds as { name: string } | null)?.name || 'Unknown Pond',
-        type: alert.type as Alert['type'],
-        severity: alert.severity as Alert['severity'],
-        message: alert.message,
-        timestamp: new Date(alert.triggered_at),
-        acknowledged: !alert.is_active,
-      }));
-
-      setAlerts(mappedAlerts);
-    } catch (error) {
-      console.error('Error fetching alerts:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAlerts();
-  }, [fetchAlerts]);
-
-  // Combine Firebase and Supabase alerts, preferring Firebase for realtime
-  const combinedAlerts = firebaseConnected ? [...firebaseAlerts, ...alerts.filter(a => 
-    !firebaseAlerts.some(fa => fa.id === a.id)
-  )] : alerts;
-
-  const acknowledgeAlert = async (alertId: string) => {
-    // Update Firebase alert if connected
-    if (database && firebaseConnected) {
-      try {
-        const { update } = await import('firebase/database');
-        const alertRef = ref(database, `ponds/${firebasePondId}/alerts/${alertId}`);
-        await update(alertRef, { acknowledged: true });
-      } catch (err) {
-        console.error('Error acknowledging Firebase alert:', err);
-      }
-    }
-
-    // Also update Supabase
-    try {
-      const { error } = await supabase
-        .from('alerts')
-        .update({ is_active: false, resolved_at: new Date().toISOString() })
-        .eq('id', alertId);
-
-      if (error) throw error;
-
-      setAlerts(prev =>
-        prev.map(a =>
-          a.id === alertId
-            ? { ...a, acknowledged: true }
-            : a
-        )
-      );
+      await fbAcknowledgeAlert(alertId);
     } catch (error) {
       console.error('Error acknowledging alert:', error);
     }
-  };
+  }, [fbAcknowledgeAlert]);
 
-  return { alerts: combinedAlerts, isLoading, acknowledgeAlert, refetch: fetchAlerts, firebaseConnected };
+  return { 
+    alerts: firebaseAlerts, 
+    isLoading, 
+    acknowledgeAlert, 
+    refetch: () => {}, 
+    firebaseConnected 
+  };
 }
 
 // Admin hooks for fetching all data
@@ -332,7 +154,6 @@ export function useAdminData() {
       setIsLoading(true);
       setError(null);
 
-      // Fetch all ponds (admin RLS allows this)
       const { data: pondsData, error: pondsError } = await supabase
         .from('ponds')
         .select('*')
@@ -340,21 +161,18 @@ export function useAdminData() {
 
       if (pondsError) throw pondsError;
 
-      // Fetch all profiles (admin RLS allows this)
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*');
 
       if (profilesError) throw profilesError;
 
-      // Fetch all user roles
       const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
         .select('*');
 
       if (rolesError) throw rolesError;
 
-      // Fetch all alerts
       const { data: alertsData, error: alertsError } = await supabase
         .from('alerts')
         .select('*, ponds(name)')
@@ -363,7 +181,6 @@ export function useAdminData() {
 
       if (alertsError) throw alertsError;
 
-      // Map profiles with roles and pond counts
       const pondsByUser = (pondsData || []).reduce((acc, pond) => {
         acc[pond.user_id] = (acc[pond.user_id] || 0) + 1;
         return acc;
@@ -377,7 +194,7 @@ export function useAdminData() {
       const mappedUsers = (profilesData || []).map(profile => ({
         id: profile.user_id,
         name: profile.full_name || 'Unknown',
-        email: profile.user_id, // We don't have email in profiles
+        email: profile.user_id,
         role: rolesByUser[profile.user_id] || 'user',
         pondCount: pondsByUser[profile.user_id] || 0,
         status: 'active',
