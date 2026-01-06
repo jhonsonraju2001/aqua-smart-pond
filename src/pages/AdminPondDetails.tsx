@@ -61,9 +61,9 @@ export default function AdminPondDetails() {
   const { 
     alerts: firebaseAlerts, 
     isLoading: alertsLoading,
-  } = useFirebaseAlerts(pondId || 'pond1');
+  } = useFirebaseAlerts();
 
-  const pondStatus = useFirebasePondStatus(pondId || 'pond1');
+  const pondStatus = useFirebasePondStatus();
 
   const fetchPondDetails = useCallback(async () => {
     if (!pondId) return;
