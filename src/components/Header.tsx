@@ -12,6 +12,7 @@ import { Bell, ChevronLeft, LogOut, Settings, User, Shield } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from './ThemeToggle';
+import { FirebaseStatus } from './FirebaseStatus';
 
 interface HeaderProps {
   title?: string;
@@ -63,6 +64,7 @@ export function Header({ title, showBack, alertCount = 0 }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-1">
+          <FirebaseStatus />
           <ThemeToggle />
           
           <Button
