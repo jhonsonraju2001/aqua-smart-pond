@@ -13,7 +13,7 @@ import { motion } from 'framer-motion';
 
 export function FirebaseStatus() {
   const { isConnected, lastSyncTime, retryConnection } = useFirebaseConnection();
-  const { pendingActionsCount } = useFirebaseDevices(true);
+  const { pendingActionsCount } = useFirebaseDevices('pond_001', true);
 
   const formatLastSync = (date: Date | null) => {
     if (!date) return 'Never';

@@ -35,8 +35,27 @@ function setCachedData(data: FirebaseSensorData): void {
   }
 }
 
-export function useFirebaseSensors(): UseFirebaseSensorsResult {
-  const [sensorData, setSensorData] = useState<FirebaseSensorData | null>(() => getCachedData());
+export function useFirebaseSensors(pondId: string = 'pond_001'): UseFirebaseSensorsResult {
+  const cacheKey = `aqua_sensors_cache_${pondId}`;
+  
+  const getCachedDataForPond = (): FirebaseSensorData | null => {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const setCachedDataForPond = (data: FirebaseSensorData): void => {
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+    } catch {
+      // localStorage might be full or unavailable
+    }
+  };
+
+  const [sensorData, setSensorData] = useState<FirebaseSensorData | null>(() => getCachedDataForPond());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -65,14 +84,14 @@ export function useFirebaseSensors(): UseFirebaseSensorsResult {
       setError('Firebase database not initialized');
       setFirebaseConnected(false);
       setIsLoading(false);
-      const cached = getCachedData();
+      const cached = getCachedDataForPond();
       if (cached) {
         setSensorData(cached);
       }
       return;
     }
 
-    const sensorsRef = ref(database, 'aquaculture/ponds/pond_001/sensors');
+    const sensorsRef = ref(database, `aquaculture/ponds/${pondId}/sensors`);
 
     const handleValue = (snapshot: any) => {
       try {
@@ -85,7 +104,7 @@ export function useFirebaseSensors(): UseFirebaseSensorsResult {
           };
           
           setSensorData(sensors);
-          setCachedData(sensors);
+          setCachedDataForPond(sensors);
           setLastUpdated(new Date());
           setFirebaseConnected(true);
           setError(null);
@@ -107,7 +126,7 @@ export function useFirebaseSensors(): UseFirebaseSensorsResult {
       setError('Failed to connect to sensor data');
       setFirebaseConnected(false);
       setIsLoading(false);
-      const cached = getCachedData();
+      const cached = getCachedDataForPond();
       if (cached) {
         setSensorData(cached);
       }
@@ -118,7 +137,7 @@ export function useFirebaseSensors(): UseFirebaseSensorsResult {
     return () => {
       off(sensorsRef);
     };
-  }, []);
+  }, [pondId, cacheKey]);
 
   return { sensorData, isLoading, error, lastUpdated, firebaseConnected };
 }

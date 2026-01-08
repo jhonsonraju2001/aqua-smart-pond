@@ -3,28 +3,6 @@ import { ref, onValue, off, update } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { Alert } from '@/types/aquaculture';
 
-const CACHE_KEY = 'aqua_alerts_cache';
-
-function getCachedAlerts(): Alert[] {
-  try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      return parsed.map((a: any) => ({ ...a, timestamp: new Date(a.timestamp) }));
-    }
-    return [];
-  } catch {
-    return [];
-  }
-}
-
-function setCachedAlerts(alerts: Alert[]): void {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(alerts));
-  } catch {
-    // localStorage might be full
-  }
-}
 
 export interface UseFirebaseAlertsResult {
   alerts: Alert[];
@@ -34,7 +12,30 @@ export interface UseFirebaseAlertsResult {
   acknowledgeAlert: (alertId: string) => Promise<void>;
 }
 
-export function useFirebaseAlerts(): UseFirebaseAlertsResult {
+export function useFirebaseAlerts(pondId: string = 'pond_001'): UseFirebaseAlertsResult {
+  const cacheKey = `aqua_alerts_cache_${pondId}`;
+
+  const getCachedAlerts = (): Alert[] => {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return parsed.map((a: any) => ({ ...a, timestamp: new Date(a.timestamp) }));
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  };
+
+  const setCachedAlerts = (alerts: Alert[]): void => {
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(alerts));
+    } catch {
+      // localStorage might be full
+    }
+  };
+
   const [alerts, setAlerts] = useState<Alert[]>(() => getCachedAlerts());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export function useFirebaseAlerts(): UseFirebaseAlertsResult {
       return;
     }
 
-    const alertsRef = ref(database, 'aquaculture/ponds/pond_001/alerts');
+    const alertsRef = ref(database, `aquaculture/ponds/${pondId}/alerts`);
 
     const handleValue = (snapshot: any) => {
       try {
@@ -95,7 +96,7 @@ export function useFirebaseAlerts(): UseFirebaseAlertsResult {
     return () => {
       off(alertsRef);
     };
-  }, []);
+  }, [pondId, cacheKey]);
 
   const acknowledgeAlert = async (alertId: string) => {
     if (!database) {
@@ -103,7 +104,7 @@ export function useFirebaseAlerts(): UseFirebaseAlertsResult {
     }
 
     try {
-      const alertRef = ref(database, `aquaculture/ponds/pond_001/alerts/${alertId}`);
+      const alertRef = ref(database, `aquaculture/ponds/${pondId}/alerts/${alertId}`);
       await update(alertRef, { acknowledged: true });
     } catch (err) {
       console.error('Error acknowledging alert:', err);

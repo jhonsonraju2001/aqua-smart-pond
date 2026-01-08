@@ -11,7 +11,7 @@ export interface PondStatus {
 // Consider device offline if no heartbeat in last 30 seconds
 const HEARTBEAT_TIMEOUT_MS = 30000;
 
-export function useFirebasePondStatus(): PondStatus {
+export function useFirebasePondStatus(pondId: string = 'pond_001'): PondStatus {
   const [lastSeen, setLastSeen] = useState<Date | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -22,7 +22,7 @@ export function useFirebasePondStatus(): PondStatus {
       return;
     }
 
-    const statusRef = ref(database, 'aquaculture/ponds/pond_001/status');
+    const statusRef = ref(database, `aquaculture/ponds/${pondId}/status`);
 
     const handleValue = (snapshot: any) => {
       try {
@@ -73,7 +73,7 @@ export function useFirebasePondStatus(): PondStatus {
       off(statusRef);
       clearInterval(intervalId);
     };
-  }, [lastSeen]);
+  }, [pondId, lastSeen]);
 
   return { isOnline, lastSeen, connectionError };
 }
