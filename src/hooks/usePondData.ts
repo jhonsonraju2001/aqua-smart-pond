@@ -52,17 +52,17 @@ export function usePondData() {
   return { ponds, isLoading, error, refetch: fetchPonds };
 }
 
-export function useSensorData(pondId: string = '', readOnly: boolean = false) {
-  // Use Firebase sensor hook - single aquaculture system
+export function useSensorData(pondId: string = 'pond_001', readOnly: boolean = false) {
+  // Use Firebase sensor hook with dynamic pondId
   const { 
     sensorData: firebaseSensorData, 
     isLoading: sensorsLoading, 
     error: sensorsError, 
     lastUpdated,
     firebaseConnected: sensorsConnected,
-  } = useFirebaseSensors();
+  } = useFirebaseSensors(pondId);
 
-  // Use Firebase devices hook with readOnly support
+  // Use Firebase devices hook with dynamic pondId and readOnly support
   const { 
     devices, 
     isLoading: devicesLoading,
@@ -70,7 +70,7 @@ export function useSensorData(pondId: string = '', readOnly: boolean = false) {
     firebaseConnected: devicesConnected,
     toggleDevice,
     setDeviceAuto,
-  } = useFirebaseDevices(readOnly);
+  } = useFirebaseDevices(pondId, readOnly);
 
   // Convert Firebase sensor data to app format
   const sensorData: SensorData | null = firebaseSensorData ? {

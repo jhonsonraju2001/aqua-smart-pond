@@ -13,32 +13,15 @@ interface UseFirebaseDevicesReturn {
   setDeviceAuto: (deviceId: string, isAuto: boolean) => Promise<void>;
 }
 
-const CACHE_KEY = 'aqua_devices_cache';
-const PENDING_ACTIONS_KEY = 'aqua_pending_device_actions';
-
 interface PendingAction {
   id: string;
+  pondId: string;
   deviceId: string;
   value: 0 | 1;
   timestamp: number;
 }
 
-function getCachedDevices(): Device[] {
-  try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    return cached ? JSON.parse(cached) : [];
-  } catch {
-    return [];
-  }
-}
-
-function setCachedDevices(devices: Device[]): void {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(devices));
-  } catch {
-    // localStorage might be full
-  }
-}
+const PENDING_ACTIONS_KEY = 'aqua_pending_device_actions';
 
 function getPendingActions(): PendingAction[] {
   try {
@@ -52,7 +35,7 @@ function getPendingActions(): PendingAction[] {
 function addPendingAction(action: PendingAction): void {
   try {
     const pending = getPendingActions();
-    const filtered = pending.filter(a => a.deviceId !== action.deviceId);
+    const filtered = pending.filter(a => !(a.deviceId === action.deviceId && a.pondId === action.pondId));
     filtered.push(action);
     localStorage.setItem(PENDING_ACTIONS_KEY, JSON.stringify(filtered));
   } catch {
@@ -75,12 +58,31 @@ const deviceConfig: Record<string, { name: string; icon: string; autoCondition?:
   light: { name: 'Lights', icon: 'Lightbulb', autoCondition: 'Scheduled lighting' },
 };
 
-export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevicesReturn {
+export function useFirebaseDevices(pondId: string = 'pond_001', readOnly: boolean = false): UseFirebaseDevicesReturn {
+  const cacheKey = `aqua_devices_cache_${pondId}`;
+
+  const getCachedDevices = (): Device[] => {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const setCachedDevices = (devices: Device[]): void => {
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(devices));
+    } catch {
+      // localStorage might be full
+    }
+  };
+
   const [devices, setDevices] = useState<Device[]>(() => getCachedDevices());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [firebaseConnected, setFirebaseConnected] = useState(false);
-  const [pendingActionsCount, setPendingActionsCount] = useState(() => getPendingActions().length);
+  const [pendingActionsCount, setPendingActionsCount] = useState(() => getPendingActions().filter(a => a.pondId === pondId).length);
   const isOnlineRef = useRef(navigator.onLine);
 
   // Sync pending actions when coming online
@@ -88,14 +90,14 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
     const syncPendingActions = async () => {
       if (!database || !navigator.onLine) return;
 
-      const pending = getPendingActions();
+      const pending = getPendingActions().filter(a => a.pondId === pondId);
       for (const action of pending) {
         try {
-          const deviceRef = ref(database, `aquaculture/ponds/pond_001/control/${action.deviceId}`);
+          const deviceRef = ref(database, `aquaculture/ponds/${action.pondId}/control/${action.deviceId}`);
           await set(deviceRef, action.value);
           removePendingAction(action.id);
-          setPendingActionsCount(getPendingActions().length);
-          console.log(`Synced pending action for device ${action.deviceId}`);
+          setPendingActionsCount(getPendingActions().filter(a => a.pondId === pondId).length);
+          console.log(`Synced pending action for device ${action.deviceId} on pond ${action.pondId}`);
         } catch (err) {
           console.error('Failed to sync pending action:', err);
         }
@@ -121,7 +123,7 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [pondId]);
 
   useEffect(() => {
     if (!database) {
@@ -131,7 +133,7 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
       return;
     }
 
-    const controlRef = ref(database, 'aquaculture/ponds/pond_001/control');
+    const controlRef = ref(database, `aquaculture/ponds/${pondId}/control`);
 
     const handleValue = (snapshot: any) => {
       try {
@@ -193,7 +195,7 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
     return () => {
       off(controlRef);
     };
-  }, []);
+  }, [pondId, cacheKey]);
 
   const toggleDevice = useCallback(async (deviceId: string) => {
     if (readOnly || !database) {
@@ -218,23 +220,24 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
 
       if (!navigator.onLine) {
         addPendingAction({
-          id: `${Date.now()}_${deviceId}`,
+          id: `${Date.now()}_${pondId}_${deviceId}`,
+          pondId,
           deviceId,
           value: newState,
           timestamp: Date.now(),
         });
-        setPendingActionsCount(getPendingActions().length);
-        console.log(`Queued offline action for device ${deviceId}`);
+        setPendingActionsCount(getPendingActions().filter(a => a.pondId === pondId).length);
+        console.log(`Queued offline action for device ${deviceId} on pond ${pondId}`);
         return;
       }
 
-      const deviceRef = ref(database, `aquaculture/ponds/pond_001/control/${deviceId}`);
+      const deviceRef = ref(database, `aquaculture/ponds/${pondId}/control/${deviceId}`);
       await set(deviceRef, newState);
     } catch (err) {
       console.error('Error toggling device:', err);
       setError('Failed to toggle device');
     }
-  }, [devices, readOnly]);
+  }, [devices, readOnly, pondId]);
 
   const setDeviceAuto = useCallback(async (deviceId: string, isAuto: boolean) => {
     if (readOnly) {
