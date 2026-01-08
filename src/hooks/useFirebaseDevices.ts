@@ -8,6 +8,7 @@ interface UseFirebaseDevicesReturn {
   isLoading: boolean;
   error: string | null;
   firebaseConnected: boolean;
+  pendingActionsCount: number;
   toggleDevice: (deviceId: string) => Promise<void>;
   setDeviceAuto: (deviceId: string, isAuto: boolean) => Promise<void>;
 }
@@ -79,6 +80,7 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [firebaseConnected, setFirebaseConnected] = useState(false);
+  const [pendingActionsCount, setPendingActionsCount] = useState(() => getPendingActions().length);
   const isOnlineRef = useRef(navigator.onLine);
 
   // Sync pending actions when coming online
@@ -89,9 +91,10 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
       const pending = getPendingActions();
       for (const action of pending) {
         try {
-          const deviceRef = ref(database, `aquaculture/control/${action.deviceId}`);
+          const deviceRef = ref(database, `aquaculture/ponds/pond_001/control/${action.deviceId}`);
           await set(deviceRef, action.value);
           removePendingAction(action.id);
+          setPendingActionsCount(getPendingActions().length);
           console.log(`Synced pending action for device ${action.deviceId}`);
         } catch (err) {
           console.error('Failed to sync pending action:', err);
@@ -128,7 +131,7 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
       return;
     }
 
-    const controlRef = ref(database, 'aquaculture/control');
+    const controlRef = ref(database, 'aquaculture/ponds/pond_001/control');
 
     const handleValue = (snapshot: any) => {
       try {
@@ -220,11 +223,12 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
           value: newState,
           timestamp: Date.now(),
         });
+        setPendingActionsCount(getPendingActions().length);
         console.log(`Queued offline action for device ${deviceId}`);
         return;
       }
 
-      const deviceRef = ref(database, `aquaculture/control/${deviceId}`);
+      const deviceRef = ref(database, `aquaculture/ponds/pond_001/control/${deviceId}`);
       await set(deviceRef, newState);
     } catch (err) {
       console.error('Error toggling device:', err);
@@ -248,5 +252,5 @@ export function useFirebaseDevices(readOnly: boolean = false): UseFirebaseDevice
     });
   }, [readOnly]);
 
-  return { devices, isLoading, error, firebaseConnected, toggleDevice, setDeviceAuto };
+  return { devices, isLoading, error, firebaseConnected, pendingActionsCount, toggleDevice, setDeviceAuto };
 }

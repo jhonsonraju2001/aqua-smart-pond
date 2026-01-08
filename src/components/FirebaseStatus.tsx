@@ -1,15 +1,19 @@
 import { useFirebaseConnection } from '@/hooks/useFirebaseConnection';
-import { Wifi, WifiOff } from 'lucide-react';
+import { useFirebaseDevices } from '@/hooks/useFirebaseDevices';
+import { Wifi, WifiOff, RefreshCw, CloudOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { motion } from 'framer-motion';
 
 export function FirebaseStatus() {
-  const { isConnected, lastSyncTime } = useFirebaseConnection();
+  const { isConnected, lastSyncTime, retryConnection } = useFirebaseConnection();
+  const { pendingActionsCount } = useFirebaseDevices(true);
 
   const formatLastSync = (date: Date | null) => {
     if (!date) return 'Never';
@@ -47,10 +51,20 @@ export function FirebaseStatus() {
             <span className="text-xs text-muted-foreground hidden sm:inline">
               {isConnected ? 'Live' : 'Offline'}
             </span>
+            {pendingActionsCount > 0 && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-status-warning/20 text-status-warning"
+              >
+                <CloudOff className="h-3 w-3" />
+                <span className="text-[10px] font-bold">{pendingActionsCount}</span>
+              </motion.div>
+            )}
           </div>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">
-          <div className="space-y-1">
+        <TooltipContent side="bottom" className="text-xs p-3">
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className={cn(
                 "h-2 w-2 rounded-full",
@@ -61,6 +75,23 @@ export function FirebaseStatus() {
             <div className="text-muted-foreground">
               Last sync: {formatLastSync(lastSyncTime)}
             </div>
+            {pendingActionsCount > 0 && (
+              <div className="flex items-center gap-1.5 text-status-warning">
+                <CloudOff className="h-3 w-3" />
+                <span>{pendingActionsCount} pending action{pendingActionsCount > 1 ? 's' : ''}</span>
+              </div>
+            )}
+            {!isConnected && (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={retryConnection}
+                className="w-full mt-2 h-7 text-xs"
+              >
+                <RefreshCw className="h-3 w-3 mr-1.5" />
+                Retry Connection
+              </Button>
+            )}
           </div>
         </TooltipContent>
       </Tooltip>
