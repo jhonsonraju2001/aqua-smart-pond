@@ -36,27 +36,26 @@ export function DeviceControl({ device, onToggle, onAutoChange, className }: Dev
                 'relative h-20 w-20 rounded-3xl flex items-center justify-center transition-all duration-300 shadow-xl',
                 device.isOn
                   ? 'bg-gradient-to-br from-status-safe to-emerald-600'
-                  : 'bg-gradient-to-br from-muted to-muted/80'
+                  : 'bg-gradient-to-br from-status-critical to-red-700'
               )}
               style={{
                 boxShadow: device.isOn
                   ? '0 10px 40px -10px hsl(var(--status-safe) / 0.5)'
-                  : '0 10px 30px -10px hsl(var(--muted-foreground) / 0.2)'
+                  : '0 10px 40px -10px hsl(var(--status-critical) / 0.5)'
               }}
             >
               {/* Animated ring when ON */}
-              {device.isOn && (
-                <motion.div
-                  className="absolute inset-0 rounded-3xl border-2 border-status-safe"
-                  initial={{ opacity: 0, scale: 1 }}
-                  animate={{ opacity: [0.5, 0], scale: [1, 1.2] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
-              )}
-              <Power className={cn(
-                'h-8 w-8 transition-colors',
-                device.isOn ? 'text-white' : 'text-muted-foreground'
-              )} />
+              {/* Animated ring */}
+              <motion.div
+                className={cn(
+                  "absolute inset-0 rounded-3xl border-2",
+                  device.isOn ? "border-status-safe" : "border-status-critical"
+                )}
+                initial={{ opacity: 0, scale: 1 }}
+                animate={{ opacity: [0.5, 0], scale: [1, 1.2] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              />
+              <Power className="h-8 w-8 text-white transition-colors" />
             </motion.button>
 
             {/* Device Info */}
@@ -79,15 +78,15 @@ export function DeviceControl({ device, onToggle, onAutoChange, className }: Dev
                     'inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full transition-colors',
                     device.isOn
                       ? 'bg-status-safe/15 text-status-safe'
-                      : 'bg-muted text-muted-foreground'
+                      : 'bg-status-critical/15 text-status-critical'
                   )}
                 >
                   <motion.span
                     className={cn(
                       'h-2 w-2 rounded-full',
-                      device.isOn ? 'bg-status-safe' : 'bg-muted-foreground'
+                      device.isOn ? 'bg-status-safe' : 'bg-status-critical'
                     )}
-                    animate={device.isOn ? { scale: [1, 1.2, 1] } : {}}
+                    animate={{ scale: [1, 1.2, 1] }}
                     transition={{ duration: 1, repeat: Infinity }}
                   />
                   {device.isOn ? 'Running' : 'Stopped'}

@@ -72,7 +72,7 @@ export function useFirebaseSensors(): UseFirebaseSensorsResult {
       return;
     }
 
-    const sensorsRef = ref(database, 'aquaculture/sensors');
+    const sensorsRef = ref(database, 'aquaculture/ponds/pond_001/sensors');
 
     const handleValue = (snapshot: any) => {
       try {

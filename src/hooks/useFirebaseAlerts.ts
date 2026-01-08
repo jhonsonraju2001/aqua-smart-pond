@@ -48,7 +48,7 @@ export function useFirebaseAlerts(): UseFirebaseAlertsResult {
       return;
     }
 
-    const alertsRef = ref(database, 'aquaculture/alerts');
+    const alertsRef = ref(database, 'aquaculture/ponds/pond_001/alerts');
 
     const handleValue = (snapshot: any) => {
       try {
@@ -103,7 +103,7 @@ export function useFirebaseAlerts(): UseFirebaseAlertsResult {
     }
 
     try {
-      const alertRef = ref(database, `aquaculture/alerts/${alertId}`);
+      const alertRef = ref(database, `aquaculture/ponds/pond_001/alerts/${alertId}`);
       await update(alertRef, { acknowledged: true });
     } catch (err) {
       console.error('Error acknowledging alert:', err);
