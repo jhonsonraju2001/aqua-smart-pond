@@ -130,7 +130,7 @@ export function useFirebasePonds() {
     );
 
     return () => {
-      off(pondsRef);
+      unsubscribe();
     };
   }, []);
 
