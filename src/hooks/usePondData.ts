@@ -5,51 +5,28 @@ import { useFirebaseDevices } from './useFirebaseDevices';
 import { useFirebaseSensors } from './useFirebaseSensors';
 import { useFirebaseAlerts } from './useFirebaseAlerts';
 import { useFirebasePondStatus } from './useFirebasePondStatus';
+import { useFirebasePonds } from './useFirebasePonds';
 
 export function usePondData() {
-  const [ponds, setPonds] = useState<Pond[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  const pondStatus = useFirebasePondStatus();
+  // Use Firebase pond discovery for real-time pond list
+  const { ponds: firebasePonds, isLoading, error, firebaseConnected } = useFirebasePonds();
 
-  const fetchPonds = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const { data, error: fetchError } = await supabase
-        .from('ponds')
-        .select('*')
-        .order('created_at', { ascending: false });
+  // Map Firebase ponds to app Pond type
+  const ponds: Pond[] = firebasePonds.map((fbPond) => ({
+    id: fbPond.id,
+    name: fbPond.name,
+    ipAddress: 'Firebase', // No IP needed - Firebase is the bridge
+    location: undefined,
+    status: fbPond.isOnline ? 'online' : 'offline',
+    lastUpdated: fbPond.lastSeen || new Date(),
+  }));
 
-      if (fetchError) {
-        throw fetchError;
-      }
+  const refetch = useCallback(() => {
+    // Firebase provides real-time updates, no manual refetch needed
+    console.log('Pond list updates automatically via Firebase');
+  }, []);
 
-      const mappedPonds: Pond[] = (data || []).map(pond => ({
-        id: pond.id,
-        name: pond.name,
-        ipAddress: pond.device_ip,
-        location: pond.location || undefined,
-        status: pondStatus.isOnline ? 'online' : 'offline',
-        lastUpdated: pondStatus.lastSeen || new Date(pond.updated_at),
-      }));
-
-      setPonds(mappedPonds);
-    } catch (err) {
-      console.error('Error fetching ponds:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch ponds');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [pondStatus.isOnline, pondStatus.lastSeen]);
-
-  useEffect(() => {
-    fetchPonds();
-  }, [fetchPonds]);
-
-  return { ponds, isLoading, error, refetch: fetchPonds };
+  return { ponds, isLoading, error, refetch, firebaseConnected };
 }
 
 export function useSensorData(pondId: string = 'pond1', readOnly: boolean = false) {
