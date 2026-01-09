@@ -58,7 +58,7 @@ const deviceConfig: Record<string, { name: string; icon: string; autoCondition?:
   light: { name: 'Lights', icon: 'Lightbulb', autoCondition: 'Scheduled lighting' },
 };
 
-export function useFirebaseDevices(pondId: string = 'pond_001', readOnly: boolean = false): UseFirebaseDevicesReturn {
+export function useFirebaseDevices(pondId: string = 'pond1', readOnly: boolean = false): UseFirebaseDevicesReturn {
   const cacheKey = `aqua_devices_cache_${pondId}`;
 
   const getCachedDevices = (): Device[] => {
@@ -93,7 +93,7 @@ export function useFirebaseDevices(pondId: string = 'pond_001', readOnly: boolea
       const pending = getPendingActions().filter(a => a.pondId === pondId);
       for (const action of pending) {
         try {
-          const deviceRef = ref(database, `aquaculture/ponds/${action.pondId}/control/${action.deviceId}`);
+          const deviceRef = ref(database, `ponds/${action.pondId}/devices/${action.deviceId}/state`);
           await set(deviceRef, action.value);
           removePendingAction(action.id);
           setPendingActionsCount(getPendingActions().filter(a => a.pondId === pondId).length);
@@ -133,7 +133,7 @@ export function useFirebaseDevices(pondId: string = 'pond_001', readOnly: boolea
       return;
     }
 
-    const controlRef = ref(database, `aquaculture/ponds/${pondId}/control`);
+    const devicesRef = ref(database, `ponds/${pondId}/devices`);
 
     const handleValue = (snapshot: any) => {
       try {
@@ -190,10 +190,10 @@ export function useFirebaseDevices(pondId: string = 'pond_001', readOnly: boolea
       }
     };
 
-    onValue(controlRef, handleValue, handleError);
+    onValue(devicesRef, handleValue, handleError);
 
     return () => {
-      off(controlRef);
+      off(devicesRef);
     };
   }, [pondId, cacheKey]);
 
@@ -206,6 +206,12 @@ export function useFirebaseDevices(pondId: string = 'pond_001', readOnly: boolea
     try {
       const device = devices.find(d => d.id === deviceId);
       if (!device) return;
+
+      // Only allow toggle if mode is manual
+      if (device.isAuto) {
+        console.log('Device is in auto mode, cannot toggle manually');
+        return;
+      }
 
       const newState: 0 | 1 = device.isOn ? 0 : 1;
       
@@ -231,8 +237,8 @@ export function useFirebaseDevices(pondId: string = 'pond_001', readOnly: boolea
         return;
       }
 
-      const deviceRef = ref(database, `aquaculture/ponds/${pondId}/control/${deviceId}`);
-      await set(deviceRef, newState);
+      const deviceStateRef = ref(database, `ponds/${pondId}/devices/${deviceId}/state`);
+      await set(deviceStateRef, newState);
     } catch (err) {
       console.error('Error toggling device:', err);
       setError('Failed to toggle device');
@@ -240,20 +246,29 @@ export function useFirebaseDevices(pondId: string = 'pond_001', readOnly: boolea
   }, [devices, readOnly, pondId]);
 
   const setDeviceAuto = useCallback(async (deviceId: string, isAuto: boolean) => {
-    if (readOnly) {
-      console.log('Device control is read-only');
+    if (readOnly || !database) {
+      console.log('Device control is read-only or Firebase not connected');
       return;
     }
 
-    // Update local state only (auto mode is UI-only for this structure)
-    setDevices(prev => {
-      const updated = prev.map(d => 
-        d.id === deviceId ? { ...d, isAuto } : d
-      );
-      setCachedDevices(updated);
-      return updated;
-    });
-  }, [readOnly]);
+    try {
+      // Update mode in Firebase
+      const deviceModeRef = ref(database, `ponds/${pondId}/devices/${deviceId}/mode`);
+      await set(deviceModeRef, isAuto ? 'auto' : 'manual');
+
+      // Optimistic update
+      setDevices(prev => {
+        const updated = prev.map(d => 
+          d.id === deviceId ? { ...d, isAuto } : d
+        );
+        setCachedDevices(updated);
+        return updated;
+      });
+    } catch (err) {
+      console.error('Error setting device mode:', err);
+      setError('Failed to set device mode');
+    }
+  }, [readOnly, pondId]);
 
   return { devices, isLoading, error, firebaseConnected, pendingActionsCount, toggleDevice, setDeviceAuto };
 }

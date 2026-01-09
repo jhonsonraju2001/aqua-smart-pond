@@ -12,7 +12,7 @@ export interface UseFirebaseAlertsResult {
   acknowledgeAlert: (alertId: string) => Promise<void>;
 }
 
-export function useFirebaseAlerts(pondId: string = 'pond_001'): UseFirebaseAlertsResult {
+export function useFirebaseAlerts(pondId: string = 'pond1'): UseFirebaseAlertsResult {
   const cacheKey = `aqua_alerts_cache_${pondId}`;
 
   const getCachedAlerts = (): Alert[] => {
@@ -49,7 +49,7 @@ export function useFirebaseAlerts(pondId: string = 'pond_001'): UseFirebaseAlert
       return;
     }
 
-    const alertsRef = ref(database, `aquaculture/ponds/${pondId}/alerts`);
+    const alertsRef = ref(database, `ponds/${pondId}/alerts`);
 
     const handleValue = (snapshot: any) => {
       try {
@@ -104,7 +104,7 @@ export function useFirebaseAlerts(pondId: string = 'pond_001'): UseFirebaseAlert
     }
 
     try {
-      const alertRef = ref(database, `aquaculture/ponds/${pondId}/alerts/${alertId}`);
+      const alertRef = ref(database, `ponds/${pondId}/alerts/${alertId}`);
       await update(alertRef, { acknowledged: true });
     } catch (err) {
       console.error('Error acknowledging alert:', err);

@@ -52,7 +52,7 @@ export function usePondData() {
   return { ponds, isLoading, error, refetch: fetchPonds };
 }
 
-export function useSensorData(pondId: string = 'pond_001', readOnly: boolean = false) {
+export function useSensorData(pondId: string = 'pond1', readOnly: boolean = false) {
   // Use Firebase sensor hook with dynamic pondId
   const { 
     sensorData: firebaseSensorData, 
@@ -72,11 +72,11 @@ export function useSensorData(pondId: string = 'pond_001', readOnly: boolean = f
     setDeviceAuto,
   } = useFirebaseDevices(pondId, readOnly);
 
-  // Convert Firebase sensor data to app format
   const sensorData: SensorData | null = firebaseSensorData ? {
     ph: firebaseSensorData.ph,
-    dissolvedOxygen: firebaseSensorData.do,
+    dissolvedOxygen: firebaseSensorData.dissolvedOxygen,
     temperature: firebaseSensorData.temperature,
+    turbidity: firebaseSensorData.turbidity,
     timestamp: lastUpdated || new Date(),
   } : null;
 

@@ -11,7 +11,7 @@ export interface PondStatus {
 // Consider device offline if no heartbeat in last 30 seconds
 const HEARTBEAT_TIMEOUT_MS = 30000;
 
-export function useFirebasePondStatus(pondId: string = 'pond_001'): PondStatus {
+export function useFirebasePondStatus(pondId: string = 'pond1'): PondStatus {
   const [lastSeen, setLastSeen] = useState<Date | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -22,25 +22,19 @@ export function useFirebasePondStatus(pondId: string = 'pond_001'): PondStatus {
       return;
     }
 
-    const statusRef = ref(database, `aquaculture/ponds/${pondId}/status`);
+    const lastSeenRef = ref(database, `ponds/${pondId}/lastSeen`);
 
     const handleValue = (snapshot: any) => {
       try {
-        const data = snapshot.val();
-        if (data) {
-          const timestamp = data.lastSeen;
-          if (timestamp) {
-            const lastSeenDate = new Date(timestamp);
-            setLastSeen(lastSeenDate);
-            
-            // Check if device is online based on heartbeat
-            const now = Date.now();
-            const timeSinceLastSeen = now - lastSeenDate.getTime();
-            setIsOnline(timeSinceLastSeen < HEARTBEAT_TIMEOUT_MS);
-          } else if (data.online !== undefined) {
-            // Fallback to online boolean if lastSeen not available
-            setIsOnline(data.online === true);
-          }
+        const timestamp = snapshot.val();
+        if (timestamp) {
+          const lastSeenDate = new Date(timestamp);
+          setLastSeen(lastSeenDate);
+          
+          // Check if device is online based on heartbeat
+          const now = Date.now();
+          const timeSinceLastSeen = now - lastSeenDate.getTime();
+          setIsOnline(timeSinceLastSeen < HEARTBEAT_TIMEOUT_MS);
           setConnectionError(null);
         } else {
           setLastSeen(null);
@@ -58,7 +52,7 @@ export function useFirebasePondStatus(pondId: string = 'pond_001'): PondStatus {
       setIsOnline(false);
     };
 
-    onValue(statusRef, handleValue, handleError);
+    onValue(lastSeenRef, handleValue, handleError);
 
     // Set up interval to check if device went offline
     const intervalId = setInterval(() => {
@@ -70,7 +64,7 @@ export function useFirebasePondStatus(pondId: string = 'pond_001'): PondStatus {
     }, 5000); // Check every 5 seconds
 
     return () => {
-      off(statusRef);
+      off(lastSeenRef);
       clearInterval(intervalId);
     };
   }, [pondId, lastSeen]);

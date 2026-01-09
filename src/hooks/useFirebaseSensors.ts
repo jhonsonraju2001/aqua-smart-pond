@@ -5,7 +5,8 @@ import { database } from '@/lib/firebase';
 export interface FirebaseSensorData {
   temperature: number;
   ph: number;
-  do: number;
+  turbidity: number;
+  dissolvedOxygen: number;
 }
 
 export interface UseFirebaseSensorsResult {
@@ -35,7 +36,7 @@ function setCachedData(data: FirebaseSensorData): void {
   }
 }
 
-export function useFirebaseSensors(pondId: string = 'pond_001'): UseFirebaseSensorsResult {
+export function useFirebaseSensors(pondId: string = 'pond1'): UseFirebaseSensorsResult {
   const cacheKey = `aqua_sensors_cache_${pondId}`;
   
   const getCachedDataForPond = (): FirebaseSensorData | null => {
@@ -91,7 +92,7 @@ export function useFirebaseSensors(pondId: string = 'pond_001'): UseFirebaseSens
       return;
     }
 
-    const sensorsRef = ref(database, `aquaculture/ponds/${pondId}/sensors`);
+    const sensorsRef = ref(database, `ponds/${pondId}/sensors`);
 
     const handleValue = (snapshot: any) => {
       try {
@@ -100,7 +101,8 @@ export function useFirebaseSensors(pondId: string = 'pond_001'): UseFirebaseSens
           const sensors: FirebaseSensorData = {
             temperature: data.temperature ?? 0,
             ph: data.ph ?? 0,
-            do: data.do ?? 0,
+            turbidity: data.turbidity ?? 0,
+            dissolvedOxygen: data.dissolvedOxygen ?? 0,
           };
           
           setSensorData(sensors);
