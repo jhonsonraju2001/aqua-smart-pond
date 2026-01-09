@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ref, onValue, off, set } from 'firebase/database';
+import { ref, onValue, set } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { Device } from '@/types/aquaculture';
 
@@ -59,31 +59,34 @@ const deviceConfig: Record<string, { name: string; icon: string; autoCondition?:
 };
 
 export function useFirebaseDevices(pondId: string = 'pond1', readOnly: boolean = false): UseFirebaseDevicesReturn {
-  const cacheKey = `aqua_devices_cache_${pondId}`;
+  // Use ref for pondId to avoid recreating callbacks
+  const pondIdRef = useRef(pondId);
+  pondIdRef.current = pondId;
 
-  const getCachedDevices = (): Device[] => {
+  const getCachedDevices = useCallback((): Device[] => {
     try {
-      const cached = localStorage.getItem(cacheKey);
+      const cached = localStorage.getItem(`aqua_devices_cache_${pondId}`);
       return cached ? JSON.parse(cached) : [];
     } catch {
       return [];
     }
-  };
+  }, [pondId]);
 
-  const setCachedDevices = (devices: Device[]): void => {
+  const [devices, setDevices] = useState<Device[]>(() => {
     try {
-      localStorage.setItem(cacheKey, JSON.stringify(devices));
+      const cached = localStorage.getItem(`aqua_devices_cache_${pondId}`);
+      return cached ? JSON.parse(cached) : [];
     } catch {
-      // localStorage might be full
+      return [];
     }
-  };
-
-  const [devices, setDevices] = useState<Device[]>(() => getCachedDevices());
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [firebaseConnected, setFirebaseConnected] = useState(false);
   const [pendingActionsCount, setPendingActionsCount] = useState(() => getPendingActions().filter(a => a.pondId === pondId).length);
   const isOnlineRef = useRef(navigator.onLine);
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
 
   // Sync pending actions when coming online
   useEffect(() => {
@@ -135,140 +138,155 @@ export function useFirebaseDevices(pondId: string = 'pond1', readOnly: boolean =
 
     const devicesRef = ref(database, `ponds/${pondId}/devices`);
 
-    const handleValue = (snapshot: any) => {
-      try {
-        const data = snapshot.val();
-        if (data) {
-          const deviceList: Device[] = Object.entries(data).map(([key, value]: [string, any]) => {
-            const config = deviceConfig[key] || { name: key, icon: 'Wind' };
-            // Value can be just 0|1 or an object with state/mode
-            const state = typeof value === 'object' ? value.state : value;
-            const mode = typeof value === 'object' ? value.mode : 'manual';
+    const unsubscribe = onValue(
+      devicesRef,
+      (snapshot) => {
+        try {
+          const data = snapshot.val();
+          if (data) {
+            const deviceList: Device[] = Object.entries(data).map(([key, value]: [string, any]) => {
+              const config = deviceConfig[key] || { name: key, icon: 'Wind' };
+              // Value can be just 0|1 or an object with state/mode
+              const state = typeof value === 'object' ? value.state : value;
+              const mode = typeof value === 'object' ? value.mode : 'manual';
+              
+              return {
+                id: key,
+                name: config.name,
+                type: key,
+                isOn: state === 1,
+                isAuto: mode === 'auto',
+                icon: config.icon,
+                autoCondition: config.autoCondition,
+              };
+            });
             
-            return {
-              id: key,
-              name: config.name,
-              type: key,
-              isOn: state === 1,
-              isAuto: mode === 'auto',
-              icon: config.icon,
-              autoCondition: config.autoCondition,
-            };
-          });
-          
-          setDevices(deviceList);
-          setCachedDevices(deviceList);
-          setFirebaseConnected(true);
-          setError(null);
-        } else {
-          // Initialize with default devices if no data
-          const defaultDevices: Device[] = [
-            { id: 'motor', name: 'Water Pump', type: 'motor', isOn: false, isAuto: false, icon: 'Droplets', autoCondition: 'When water level is low' },
-            { id: 'aerator', name: 'Aerator', type: 'aerator', isOn: false, isAuto: false, icon: 'Wind', autoCondition: 'When DO < 5.0 mg/L' },
-            { id: 'light', name: 'Lights', type: 'light', isOn: false, isAuto: false, icon: 'Lightbulb', autoCondition: 'Scheduled lighting' },
-          ];
-          setDevices(defaultDevices);
-          setFirebaseConnected(true);
+            setDevices(deviceList);
+            // Cache using pondId directly
+            try {
+              localStorage.setItem(`aqua_devices_cache_${pondId}`, JSON.stringify(deviceList));
+            } catch {}
+            setFirebaseConnected(true);
+            setError(null);
+          } else {
+            // Initialize with default devices if no data
+            const defaultDevices: Device[] = [
+              { id: 'motor', name: 'Water Pump', type: 'motor', isOn: false, isAuto: false, icon: 'Droplets', autoCondition: 'When water level is low' },
+              { id: 'aerator', name: 'Aerator', type: 'aerator', isOn: false, isAuto: false, icon: 'Wind', autoCondition: 'When DO < 5.0 mg/L' },
+              { id: 'light', name: 'Lights', type: 'light', isOn: false, isAuto: false, icon: 'Lightbulb', autoCondition: 'Scheduled lighting' },
+            ];
+            setDevices(defaultDevices);
+            setFirebaseConnected(true);
+          }
+          setIsLoading(false);
+        } catch (err) {
+          console.error('Error parsing device data:', err);
+          setError('Failed to parse device data');
+          setFirebaseConnected(false);
+          setIsLoading(false);
         }
-        setIsLoading(false);
-      } catch (err) {
-        console.error('Error parsing device data:', err);
-        setError('Failed to parse device data');
+      },
+      (err) => {
+        console.error('Firebase device read error:', err);
+        setError('Failed to connect to device data');
         setFirebaseConnected(false);
         setIsLoading(false);
+        // Load from cache on error
+        try {
+          const cached = localStorage.getItem(`aqua_devices_cache_${pondId}`);
+          if (cached) {
+            setDevices(JSON.parse(cached));
+          }
+        } catch {}
       }
-    };
-
-    const handleError = (err: Error) => {
-      console.error('Firebase device read error:', err);
-      setError('Failed to connect to device data');
-      setFirebaseConnected(false);
-      setIsLoading(false);
-      const cached = getCachedDevices();
-      if (cached.length > 0) {
-        setDevices(cached);
-      }
-    };
-
-    onValue(devicesRef, handleValue, handleError);
+    );
 
     return () => {
-      off(devicesRef);
+      unsubscribe();
     };
-  }, [pondId, cacheKey]);
+  }, [pondId]);
 
   const toggleDevice = useCallback(async (deviceId: string) => {
-    if (readOnly || !database) {
+    if (readOnlyRef.current || !database) {
       console.log('Device control is read-only or Firebase not connected');
       return;
     }
 
-    try {
-      const device = devices.find(d => d.id === deviceId);
-      if (!device) return;
+    // Get current device state from the current devices state
+    setDevices(prev => {
+      const device = prev.find(d => d.id === deviceId);
+      if (!device) return prev;
 
       // Only allow toggle if mode is manual
       if (device.isAuto) {
         console.log('Device is in auto mode, cannot toggle manually');
-        return;
+        return prev;
       }
 
       const newState: 0 | 1 = device.isOn ? 0 : 1;
+      const currentPondId = pondIdRef.current;
       
       // Optimistic update
-      setDevices(prev => {
-        const updated = prev.map(d => 
-          d.id === deviceId ? { ...d, isOn: newState === 1 } : d
-        );
-        setCachedDevices(updated);
-        return updated;
-      });
+      const updated = prev.map(d => 
+        d.id === deviceId ? { ...d, isOn: newState === 1 } : d
+      );
+      
+      // Cache update
+      try {
+        localStorage.setItem(`aqua_devices_cache_${currentPondId}`, JSON.stringify(updated));
+      } catch {}
 
+      // Firebase update (async, but we don't wait for it)
       if (!navigator.onLine) {
         addPendingAction({
-          id: `${Date.now()}_${pondId}_${deviceId}`,
-          pondId,
+          id: `${Date.now()}_${currentPondId}_${deviceId}`,
+          pondId: currentPondId,
           deviceId,
           value: newState,
           timestamp: Date.now(),
         });
-        setPendingActionsCount(getPendingActions().filter(a => a.pondId === pondId).length);
-        console.log(`Queued offline action for device ${deviceId} on pond ${pondId}`);
-        return;
+        setPendingActionsCount(getPendingActions().filter(a => a.pondId === currentPondId).length);
+        console.log(`Queued offline action for device ${deviceId} on pond ${currentPondId}`);
+      } else {
+        const deviceStateRef = ref(database, `ponds/${currentPondId}/devices/${deviceId}/state`);
+        set(deviceStateRef, newState).catch(err => {
+          console.error('Error toggling device:', err);
+          setError('Failed to toggle device');
+        });
       }
 
-      const deviceStateRef = ref(database, `ponds/${pondId}/devices/${deviceId}/state`);
-      await set(deviceStateRef, newState);
-    } catch (err) {
-      console.error('Error toggling device:', err);
-      setError('Failed to toggle device');
-    }
-  }, [devices, readOnly, pondId]);
+      return updated;
+    });
+  }, []);
 
   const setDeviceAuto = useCallback(async (deviceId: string, isAuto: boolean) => {
-    if (readOnly || !database) {
+    if (readOnlyRef.current || !database) {
       console.log('Device control is read-only or Firebase not connected');
       return;
     }
 
+    const currentPondId = pondIdRef.current;
+
+    // Optimistic update first
+    setDevices(prev => {
+      const updated = prev.map(d => 
+        d.id === deviceId ? { ...d, isAuto } : d
+      );
+      try {
+        localStorage.setItem(`aqua_devices_cache_${currentPondId}`, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     try {
       // Update mode in Firebase
-      const deviceModeRef = ref(database, `ponds/${pondId}/devices/${deviceId}/mode`);
+      const deviceModeRef = ref(database, `ponds/${currentPondId}/devices/${deviceId}/mode`);
       await set(deviceModeRef, isAuto ? 'auto' : 'manual');
-
-      // Optimistic update
-      setDevices(prev => {
-        const updated = prev.map(d => 
-          d.id === deviceId ? { ...d, isAuto } : d
-        );
-        setCachedDevices(updated);
-        return updated;
-      });
     } catch (err) {
       console.error('Error setting device mode:', err);
       setError('Failed to set device mode');
     }
-  }, [readOnly, pondId]);
+  }, []);
 
   return { devices, isLoading, error, firebaseConnected, pendingActionsCount, toggleDevice, setDeviceAuto };
 }
