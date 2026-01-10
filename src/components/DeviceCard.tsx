@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
-import { motion } from "framer-motion";
-import { Fan, Lightbulb, Power, Waves } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Droplets, Wind, Lightbulb, Zap } from "lucide-react";
 
 import { database } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 
 export type StaticDeviceType = "motor" | "aerator" | "light";
@@ -19,24 +18,52 @@ interface DeviceCardProps {
 
 type DeviceMode = "manual" | "auto";
 
-function deviceMeta(type: StaticDeviceType) {
+interface DeviceMeta {
+  icon: typeof Droplets;
+  subtitle: string;
+  accentClass: string;
+  bgClass: string;
+  glowClass: string;
+}
+
+function deviceMeta(type: StaticDeviceType): DeviceMeta {
   switch (type) {
     case "motor":
-      return { icon: Waves, subtitle: "Water Pump" };
+      return {
+        icon: Droplets,
+        subtitle: "Water Pump",
+        accentClass: "text-[hsl(205,80%,50%)]",
+        bgClass: "bg-[hsl(205,80%,50%)]/10",
+        glowClass: "shadow-[0_0_20px_hsl(205,80%,50%,0.25)]",
+      };
     case "aerator":
-      return { icon: Fan, subtitle: "Aeration" };
+      return {
+        icon: Wind,
+        subtitle: "Aeration System",
+        accentClass: "text-[hsl(152,60%,48%)]",
+        bgClass: "bg-[hsl(152,60%,48%)]/10",
+        glowClass: "shadow-[0_0_20px_hsl(152,60%,48%,0.25)]",
+      };
     case "light":
-      return { icon: Lightbulb, subtitle: "Lighting" };
+      return {
+        icon: Lightbulb,
+        subtitle: "Pond Lighting",
+        accentClass: "text-[hsl(38,92%,50%)]",
+        bgClass: "bg-[hsl(38,92%,50%)]/10",
+        glowClass: "shadow-[0_0_20px_hsl(38,92%,50%,0.25)]",
+      };
   }
 }
 
 export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) {
   const [isOn, setIsOn] = useState(false);
   const [mode, setMode] = useState<DeviceMode>("manual");
-  const [isPressing, setIsPressing] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
 
-  const { icon: Icon, subtitle } = useMemo(() => deviceMeta(type), [type]);
+  const { icon: Icon, subtitle, accentClass, bgClass, glowClass } = useMemo(
+    () => deviceMeta(type),
+    [type]
+  );
 
   useEffect(() => {
     const deviceRef = ref(database, `ponds/${pondId}/devices/${type}`);
@@ -56,21 +83,15 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
     return () => unsubscribe();
   }, [pondId, type]);
 
-  const handleTogglePower = async () => {
-    // Local-only press feedback.
-    setIsPressing(true);
-    window.setTimeout(() => setIsPressing(false), 140);
-
-    const nextOn = !isOn;
-
+  const handleTogglePower = async (checked: boolean) => {
     // Optimistic local UI update (does NOT affect siblings).
-    setIsOn(nextOn);
+    setIsOn(checked);
 
     setIsWriting(true);
     try {
       // Manual override contract: set mode=manual before writing state.
       await set(ref(database, `ponds/${pondId}/devices/${type}/mode`), "manual");
-      await set(ref(database, `ponds/${pondId}/devices/${type}/state`), nextOn ? 1 : 0);
+      await set(ref(database, `ponds/${pondId}/devices/${type}/state`), checked ? 1 : 0);
       setMode("manual");
     } finally {
       setIsWriting(false);
@@ -94,93 +115,134 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   const isAuto = mode === "auto";
 
   return (
-    <Card
-      variant="device"
-      className={cn("rounded-2xl", className)}
+    <motion.div
+      layout
+      className={cn(
+        "relative rounded-2xl border bg-card p-4 transition-all duration-300",
+        isOn ? glowClass : "shadow-sm",
+        className
+      )}
       aria-label={`${title} control`}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                "h-11 w-11 rounded-2xl flex items-center justify-center border",
-                isOn
-                  ? "bg-status-safe/10 border-status-safe/20"
-                  : "bg-status-critical/10 border-status-critical/20"
-              )}
-            >
-              <Icon
-                className={cn(
-                  "h-5 w-5",
-                  isOn ? "text-status-safe" : "text-status-critical"
-                )}
-              />
-            </div>
-
-            <div>
-              <div className="text-base font-semibold text-foreground">{title}</div>
-              <div className="text-xs text-muted-foreground">{subtitle}</div>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end">
-            <div
-              className={cn(
-                "text-xs font-medium",
-                isOn ? "text-status-safe" : "text-status-critical"
-              )}
-            >
-              {isOn ? "ON" : "OFF"}
-            </div>
-            <div className="text-[11px] text-muted-foreground">
-              {isAuto ? "Auto" : "Manual"}
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="pt-0">
-        <div className="flex items-center justify-between gap-4">
-          <motion.button
-            type="button"
-            onClick={handleTogglePower}
-            onPointerDown={() => setIsPressing(true)}
-            onPointerUp={() => setIsPressing(false)}
-            onPointerCancel={() => setIsPressing(false)}
-            disabled={isWriting}
+      {/* Top Row: Icon, Title, Status Pill */}
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          {/* Icon Container */}
+          <div
             className={cn(
-              "w-full rounded-2xl border px-4 py-4 flex items-center justify-center gap-2 transition-colors",
-              isOn
-                ? "bg-status-safe/10 border-status-safe/20"
-                : "bg-status-critical/10 border-status-critical/20"
+              "h-11 w-11 rounded-xl flex items-center justify-center transition-colors duration-300",
+              isOn ? bgClass : "bg-muted"
             )}
-            animate={{ scale: isPressing ? 0.98 : 1 }}
-            transition={{ duration: 0.08 }}
-            aria-pressed={isOn}
           >
-            <Power
+            <Icon
               className={cn(
-                "h-5 w-5",
-                isOn ? "text-status-safe" : "text-status-critical"
+                "h-5 w-5 transition-colors duration-300",
+                isOn ? accentClass : "text-muted-foreground"
               )}
-            />
-            <span className="text-sm font-semibold text-foreground">
-              {isWriting ? "Updating…" : isOn ? "Turn Off" : "Turn On"}
-            </span>
-          </motion.button>
-
-          <div className="shrink-0 flex items-center gap-2 rounded-2xl border px-3 py-3 bg-card">
-            <span className="text-xs text-muted-foreground">Auto</span>
-            <Switch
-              checked={isAuto}
-              onCheckedChange={handleAutoChange}
-              disabled={isWriting}
-              aria-label={`Toggle ${title} auto mode`}
+              strokeWidth={2}
             />
           </div>
+
+          {/* Title & Subtitle */}
+          <div>
+            <h3 className="text-sm font-semibold text-foreground leading-tight">
+              {title}
+            </h3>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+
+        {/* Status Pill */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={isOn ? "on" : "off"}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.15 }}
+            className={cn(
+              "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors duration-300",
+              isOn
+                ? cn(bgClass, accentClass)
+                : "bg-muted text-muted-foreground"
+            )}
+          >
+            {isOn ? "ON" : "OFF"}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Main Toggle Switch (Primary Action) */}
+      <div className="flex items-center justify-center py-3">
+        <motion.div
+          className="relative"
+          whileTap={{ scale: 0.96 }}
+          transition={{ duration: 0.1 }}
+        >
+          <Switch
+            checked={isOn}
+            onCheckedChange={handleTogglePower}
+            disabled={isWriting}
+            aria-label={`Toggle ${title} power`}
+            className={cn(
+              "h-8 w-14 data-[state=checked]:bg-[hsl(var(--device-on))]",
+              type === "motor" && "data-[state=checked]:bg-[hsl(205,80%,50%)]",
+              type === "aerator" && "data-[state=checked]:bg-[hsl(152,60%,48%)]",
+              type === "light" && "data-[state=checked]:bg-[hsl(38,92%,50%)]"
+            )}
+          />
+        </motion.div>
+      </div>
+
+      {/* Divider */}
+      <div className="h-px bg-border my-3" />
+
+      {/* Bottom Row: Auto Mode Toggle */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Zap
+            className={cn(
+              "h-3.5 w-3.5 transition-colors duration-300",
+              isAuto ? "text-device-auto" : "text-muted-foreground"
+            )}
+          />
+          <span className="text-xs text-muted-foreground font-medium">
+            Auto Mode
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "text-[10px] font-medium uppercase tracking-wide transition-colors duration-200",
+              isAuto ? "text-device-auto" : "text-muted-foreground"
+            )}
+          >
+            {isAuto ? "Auto" : "Manual"}
+          </span>
+          <Switch
+            checked={isAuto}
+            onCheckedChange={handleAutoChange}
+            disabled={isWriting}
+            aria-label={`Toggle ${title} auto mode`}
+            className="h-5 w-9 data-[state=checked]:bg-device-auto"
+          />
+        </div>
+      </div>
+
+      {/* Writing indicator overlay */}
+      <AnimatePresence>
+        {isWriting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-background/50 rounded-2xl flex items-center justify-center backdrop-blur-[2px]"
+          >
+            <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

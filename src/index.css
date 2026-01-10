@@ -46,6 +46,11 @@
     --device-off: 215 16% 70%;
     --device-auto: 205 80% 50%;
 
+    /* Device accent colors (per-device) */
+    --device-motor: 205 80% 50%;
+    --device-aerator: 152 60% 48%;
+    --device-light: 38 92% 50%;
+
     /* Destructive */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
