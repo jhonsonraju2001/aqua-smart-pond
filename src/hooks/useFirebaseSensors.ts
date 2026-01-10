@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { ref, onValue, off } from 'firebase/database';
+import { ref, onValue } from 'firebase/database';
 import { database } from '@/lib/firebase';
-
 export interface FirebaseSensorData {
   temperature: number;
   ph: number;
@@ -134,12 +133,12 @@ export function useFirebaseSensors(pondId: string = 'pond1'): UseFirebaseSensors
       }
     };
 
-    onValue(sensorsRef, handleValue, handleError);
+    const unsubscribe = onValue(sensorsRef, handleValue, handleError);
 
     return () => {
-      off(sensorsRef);
+      unsubscribe();
     };
-  }, [pondId, cacheKey]);
+  }, [pondId]);
 
   return { sensorData, isLoading, error, lastUpdated, firebaseConnected };
 }
