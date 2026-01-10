@@ -3,7 +3,7 @@ import { usePondData } from "@/hooks/usePondData";
 import { Header } from "@/components/Header";
 import { DeviceCard } from "@/components/DeviceCard";
 import { Button } from "@/components/ui/button";
-import { Calendar, Loader2, ToggleRight } from "lucide-react";
+import { Calendar, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function DeviceControls() {
@@ -16,7 +16,7 @@ export default function DeviceControls() {
 
   if (pondsLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -24,7 +24,7 @@ export default function DeviceControls() {
 
   if (!pond) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
         <div className="text-center">
           <h2 className="text-xl font-semibold mb-2">Pond Not Found</h2>
           <Button onClick={() => navigate("/")}>Go Back</Button>
@@ -34,53 +34,68 @@ export default function DeviceControls() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-8">
+    <div className="min-h-screen bg-muted/30 pb-8">
       <Header title="Device Controls" showBack />
 
-      <main className="p-4 max-w-lg mx-auto">
-        {/* Header Section */}
+      <main className="p-4 max-w-md mx-auto">
+        {/* Minimal Header */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="flex items-center justify-between mb-6"
+          transition={{ duration: 0.25 }}
+          className="flex items-center justify-between mb-5"
         >
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <ToggleRight className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-foreground">{pond.name}</h2>
-              <p className="text-xs text-muted-foreground">3 devices (static dashboard)</p>
-            </div>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">{pond.name}</h2>
+            <p className="text-xs text-muted-foreground">3 devices connected</p>
           </div>
 
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => navigate(`/pond/${pond.id}/schedules`)}
-            className="rounded-xl"
+            className="text-muted-foreground hover:text-foreground gap-1.5"
           >
-            <Calendar className="h-4 w-4 mr-1" />
+            <Calendar className="h-4 w-4" />
             Schedules
           </Button>
         </motion.div>
 
         {/* STATIC Device Cards (always mounted; no loops; no conditions) */}
         <div className="space-y-3">
-          <DeviceCard pondId={stablePondId} type="motor" title="Water Pump" />
-          <DeviceCard pondId={stablePondId} type="aerator" title="Aerator" />
-          <DeviceCard pondId={stablePondId} type="light" title="Light" />
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+          >
+            <DeviceCard pondId={stablePondId} type="motor" title="Water Pump" />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <DeviceCard pondId={stablePondId} type="aerator" title="Aerator" />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.15 }}
+          >
+            <DeviceCard pondId={stablePondId} type="light" title="Light" />
+          </motion.div>
         </div>
 
-        {/* Helper text */}
+        {/* Subtle footer hint */}
         <motion.p
-          className="text-center text-xs text-muted-foreground mt-6"
+          className="text-center text-[11px] text-muted-foreground mt-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
+          transition={{ duration: 0.25, delay: 0.25 }}
         >
-          Tapping a device only writes to its own Firebase path. All cards stay visible.
+          Tap the toggle to control each device
         </motion.p>
       </main>
     </div>
