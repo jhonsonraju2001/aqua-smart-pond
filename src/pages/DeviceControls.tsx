@@ -1,18 +1,41 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { ref, set } from "firebase/database";
 import { usePondData } from "@/hooks/usePondData";
+import { database } from "@/lib/firebase";
 import { Header } from "@/components/Header";
 import { DeviceCard } from "@/components/DeviceCard";
 import { Button } from "@/components/ui/button";
-import { Calendar, Loader2 } from "lucide-react";
+import { Calendar, Loader2, PowerOff } from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 export default function DeviceControls() {
   const { pondId } = useParams<{ pondId: string }>();
   const navigate = useNavigate();
   const { ponds, isLoading: pondsLoading } = usePondData();
+  const [isAllOff, setIsAllOff] = useState(false);
 
   const pond = ponds.find((p) => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
   const stablePondId = pondId || pond?.id || "pond1";
+
+  const handleAllOff = async () => {
+    setIsAllOff(true);
+    try {
+      const devices = ["motor", "aerator", "light"];
+      await Promise.all(
+        devices.map(async (device) => {
+          await set(ref(database, `ponds/${stablePondId}/devices/${device}/mode`), "manual");
+          await set(ref(database, `ponds/${stablePondId}/devices/${device}/state`), 0);
+        })
+      );
+      toast.success("All devices turned off");
+    } catch (error) {
+      toast.error("Failed to turn off devices");
+    } finally {
+      setIsAllOff(false);
+    }
+  };
 
   if (pondsLoading) {
     return (
@@ -38,7 +61,7 @@ export default function DeviceControls() {
       <Header title="Device Controls" showBack />
 
       <main className="p-4 max-w-md mx-auto">
-        {/* Minimal Header */}
+        {/* Header with All Off Button */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -50,19 +73,37 @@ export default function DeviceControls() {
             <p className="text-xs text-muted-foreground">3 devices connected</p>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(`/pond/${pond.id}/schedules`)}
-            className="text-muted-foreground hover:text-foreground gap-1.5"
-          >
-            <Calendar className="h-4 w-4" />
-            Schedules
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* All Off Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAllOff}
+              disabled={isAllOff}
+              className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive gap-1.5"
+            >
+              {isAllOff ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PowerOff className="h-4 w-4" />
+              )}
+              All Off
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/pond/${pond.id}/schedules`)}
+              className="text-muted-foreground hover:text-foreground gap-1.5"
+            >
+              <Calendar className="h-4 w-4" />
+              Schedules
+            </Button>
+          </div>
         </motion.div>
 
-        {/* STATIC Device Cards (always mounted; no loops; no conditions) */}
-        <div className="space-y-3">
+        {/* STATIC Device Cards */}
+        <div className="space-y-4">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -95,7 +136,7 @@ export default function DeviceControls() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.25, delay: 0.25 }}
         >
-          Tap the toggle to control each device
+          Tap the circle buttons to control each device
         </motion.p>
       </main>
     </div>

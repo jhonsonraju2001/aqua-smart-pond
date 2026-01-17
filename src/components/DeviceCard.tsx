@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { motion, AnimatePresence } from "framer-motion";
-import { Droplets, Wind, Lightbulb, Zap } from "lucide-react";
+import { Droplets, Wind, Lightbulb, Zap, Power } from "lucide-react";
 
 import { database } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
@@ -21,9 +21,12 @@ type DeviceMode = "manual" | "auto";
 interface DeviceMeta {
   icon: typeof Droplets;
   subtitle: string;
+  accentHsl: string;
   accentClass: string;
   bgClass: string;
   glowClass: string;
+  buttonOnClass: string;
+  buttonOffClass: string;
 }
 
 function deviceMeta(type: StaticDeviceType): DeviceMeta {
@@ -32,25 +35,34 @@ function deviceMeta(type: StaticDeviceType): DeviceMeta {
       return {
         icon: Droplets,
         subtitle: "Water Pump",
+        accentHsl: "205,80%,50%",
         accentClass: "text-[hsl(205,80%,50%)]",
         bgClass: "bg-[hsl(205,80%,50%)]/10",
-        glowClass: "shadow-[0_0_20px_hsl(205,80%,50%,0.25)]",
+        glowClass: "shadow-[0_0_24px_hsl(205,80%,50%,0.3)]",
+        buttonOnClass: "bg-[hsl(205,80%,50%)] shadow-[0_0_30px_hsl(205,80%,50%,0.5)]",
+        buttonOffClass: "bg-muted hover:bg-muted/80",
       };
     case "aerator":
       return {
         icon: Wind,
         subtitle: "Aeration System",
+        accentHsl: "152,60%,48%",
         accentClass: "text-[hsl(152,60%,48%)]",
         bgClass: "bg-[hsl(152,60%,48%)]/10",
-        glowClass: "shadow-[0_0_20px_hsl(152,60%,48%,0.25)]",
+        glowClass: "shadow-[0_0_24px_hsl(152,60%,48%,0.3)]",
+        buttonOnClass: "bg-[hsl(152,60%,48%)] shadow-[0_0_30px_hsl(152,60%,48%,0.5)]",
+        buttonOffClass: "bg-muted hover:bg-muted/80",
       };
     case "light":
       return {
         icon: Lightbulb,
         subtitle: "Pond Lighting",
+        accentHsl: "38,92%,50%",
         accentClass: "text-[hsl(38,92%,50%)]",
         bgClass: "bg-[hsl(38,92%,50%)]/10",
-        glowClass: "shadow-[0_0_20px_hsl(38,92%,50%,0.25)]",
+        glowClass: "shadow-[0_0_24px_hsl(38,92%,50%,0.3)]",
+        buttonOnClass: "bg-[hsl(38,92%,50%)] shadow-[0_0_30px_hsl(38,92%,50%,0.5)]",
+        buttonOffClass: "bg-muted hover:bg-muted/80",
       };
   }
 }
@@ -60,10 +72,8 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   const [mode, setMode] = useState<DeviceMode>("manual");
   const [isWriting, setIsWriting] = useState(false);
 
-  const { icon: Icon, subtitle, accentClass, bgClass, glowClass } = useMemo(
-    () => deviceMeta(type),
-    [type]
-  );
+  const meta = useMemo(() => deviceMeta(type), [type]);
+  const { icon: Icon, subtitle, accentClass, bgClass, glowClass, buttonOnClass, buttonOffClass } = meta;
 
   useEffect(() => {
     const deviceRef = ref(database, `ponds/${pondId}/devices/${type}`);
@@ -83,15 +93,14 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
     return () => unsubscribe();
   }, [pondId, type]);
 
-  const handleTogglePower = async (checked: boolean) => {
-    // Optimistic local UI update (does NOT affect siblings).
-    setIsOn(checked);
+  const handleTogglePower = async (turnOn: boolean) => {
+    // Optimistic local UI update
+    setIsOn(turnOn);
 
     setIsWriting(true);
     try {
-      // Manual override contract: set mode=manual before writing state.
       await set(ref(database, `ponds/${pondId}/devices/${type}/mode`), "manual");
-      await set(ref(database, `ponds/${pondId}/devices/${type}/state`), checked ? 1 : 0);
+      await set(ref(database, `ponds/${pondId}/devices/${type}/state`), turnOn ? 1 : 0);
       setMode("manual");
     } finally {
       setIsWriting(false);
@@ -100,8 +109,6 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
 
   const handleAutoChange = async (checked: boolean) => {
     const nextMode: DeviceMode = checked ? "auto" : "manual";
-
-    // Optimistic UI update.
     setMode(nextMode);
 
     setIsWriting(true);
@@ -118,25 +125,25 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
     <motion.div
       layout
       className={cn(
-        "relative rounded-2xl border bg-card p-4 transition-all duration-300",
+        "relative rounded-2xl border bg-card p-5 transition-all duration-300",
         isOn ? glowClass : "shadow-sm",
         className
       )}
       aria-label={`${title} control`}
     >
       {/* Top Row: Icon, Title, Status Pill */}
-      <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
           {/* Icon Container */}
           <div
             className={cn(
-              "h-11 w-11 rounded-xl flex items-center justify-center transition-colors duration-300",
+              "h-12 w-12 rounded-xl flex items-center justify-center transition-colors duration-300",
               isOn ? bgClass : "bg-muted"
             )}
           >
             <Icon
               className={cn(
-                "h-5 w-5 transition-colors duration-300",
+                "h-6 w-6 transition-colors duration-300",
                 isOn ? accentClass : "text-muted-foreground"
               )}
               strokeWidth={2}
@@ -145,7 +152,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
 
           {/* Title & Subtitle */}
           <div>
-            <h3 className="text-sm font-semibold text-foreground leading-tight">
+            <h3 className="text-base font-semibold text-foreground leading-tight">
               {title}
             </h3>
             <p className="text-xs text-muted-foreground">{subtitle}</p>
@@ -161,7 +168,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ duration: 0.15 }}
             className={cn(
-              "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors duration-300",
+              "px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-colors duration-300",
               isOn
                 ? cn(bgClass, accentClass)
                 : "bg-muted text-muted-foreground"
@@ -172,41 +179,58 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
         </AnimatePresence>
       </div>
 
-      {/* Main Toggle Switch (Primary Action) */}
-      <div className="flex items-center justify-center py-3">
-        <motion.div
-          className="relative"
-          whileTap={{ scale: 0.96 }}
-          transition={{ duration: 0.1 }}
+      {/* Large Circular ON/OFF Buttons */}
+      <div className="flex items-center justify-center gap-6 py-4">
+        {/* OFF Button */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => handleTogglePower(false)}
+          disabled={isWriting}
+          className={cn(
+            "h-20 w-20 rounded-full flex flex-col items-center justify-center transition-all duration-300 border-2",
+            !isOn
+              ? "bg-muted/80 border-foreground/20 text-foreground"
+              : "bg-background border-border text-muted-foreground hover:border-foreground/30"
+          )}
+          aria-label={`Turn ${title} off`}
         >
-          <Switch
-            checked={isOn}
-            onCheckedChange={handleTogglePower}
-            disabled={isWriting}
-            aria-label={`Toggle ${title} power`}
-            className={cn(
-              "h-8 w-14 data-[state=checked]:bg-[hsl(var(--device-on))]",
-              type === "motor" && "data-[state=checked]:bg-[hsl(205,80%,50%)]",
-              type === "aerator" && "data-[state=checked]:bg-[hsl(152,60%,48%)]",
-              type === "light" && "data-[state=checked]:bg-[hsl(38,92%,50%)]"
-            )}
-          />
-        </motion.div>
+          <Power className="h-7 w-7 mb-1" strokeWidth={2} />
+          <span className="text-[10px] font-bold uppercase tracking-wide">Off</span>
+        </motion.button>
+
+        {/* ON Button */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => handleTogglePower(true)}
+          disabled={isWriting}
+          className={cn(
+            "h-20 w-20 rounded-full flex flex-col items-center justify-center transition-all duration-300 border-2",
+            isOn
+              ? cn(buttonOnClass, "border-transparent text-white")
+              : "bg-background border-border text-muted-foreground hover:border-foreground/30"
+          )}
+          aria-label={`Turn ${title} on`}
+        >
+          <Power className="h-7 w-7 mb-1" strokeWidth={2} />
+          <span className="text-[10px] font-bold uppercase tracking-wide">On</span>
+        </motion.button>
       </div>
 
       {/* Divider */}
-      <div className="h-px bg-border my-3" />
+      <div className="h-px bg-border my-4" />
 
       {/* Bottom Row: Auto Mode Toggle */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap
             className={cn(
-              "h-3.5 w-3.5 transition-colors duration-300",
+              "h-4 w-4 transition-colors duration-300",
               isAuto ? "text-device-auto" : "text-muted-foreground"
             )}
           />
-          <span className="text-xs text-muted-foreground font-medium">
+          <span className="text-sm text-muted-foreground font-medium">
             Auto Mode
           </span>
         </div>
@@ -214,7 +238,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
         <div className="flex items-center gap-2">
           <span
             className={cn(
-              "text-[10px] font-medium uppercase tracking-wide transition-colors duration-200",
+              "text-xs font-medium uppercase tracking-wide transition-colors duration-200",
               isAuto ? "text-device-auto" : "text-muted-foreground"
             )}
           >
@@ -239,7 +263,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-background/50 rounded-2xl flex items-center justify-center backdrop-blur-[2px]"
           >
-            <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </motion.div>
         )}
       </AnimatePresence>
