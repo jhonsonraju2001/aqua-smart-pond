@@ -7,16 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Waves, Mail, Lock, User, Loader2, Eye, EyeOff, Shield, Users, Database } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Waves, Mail, Lock, User, Loader2, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-// Demo account credentials for client presentation
-const DEMO_ACCOUNTS = {
-  admin: { email: 'admin@aquafarm.demo', password: 'demo123', label: 'Admin', icon: Shield, description: 'Full access' },
-  multiPond: { email: 'farmer@aquafarm.demo', password: 'demo123', label: 'Multi-Pond', icon: Users, description: 'Multiple ponds' },
-  singlePond: { email: 'user@aquafarm.demo', password: 'demo123', label: 'Single Pond', icon: Database, description: 'One pond' },
-};
 
 export default function Login() {
   const navigate = useNavigate();
@@ -32,22 +24,6 @@ export default function Login() {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirm, setSignupConfirm] = useState('');
-  const [demoLoading, setDemoLoading] = useState<string | null>(null);
-
-  const handleDemoLogin = async (accountType: keyof typeof DEMO_ACCOUNTS) => {
-    const account = DEMO_ACCOUNTS[accountType];
-    setDemoLoading(accountType);
-    
-    try {
-      await login(account.email, account.password);
-      toast.success(`Welcome! Logged in as ${account.label}`);
-      navigate('/');
-    } catch (error) {
-      toast.error('Demo account not set up. Please create it first via Sign Up.');
-    } finally {
-      setDemoLoading(null);
-    }
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +148,7 @@ export default function Login() {
                     Sign in to monitor your fish ponds
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5">
+                <CardContent>
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="login-email" className="text-sm font-medium">Email</Label>
@@ -229,36 +205,6 @@ export default function Login() {
                       )}
                     </Button>
                   </form>
-
-                  {/* Demo Login Section */}
-                  <div className="pt-4 border-t border-border">
-                    <p className="text-xs font-medium text-muted-foreground mb-3 text-center">Quick Demo Access</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {Object.entries(DEMO_ACCOUNTS).map(([key, account]) => {
-                        const Icon = account.icon;
-                        return (
-                          <motion.div key={key} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDemoLogin(key as keyof typeof DEMO_ACCOUNTS)}
-                              disabled={isLoading || demoLoading !== null}
-                              className="flex flex-col items-center gap-1 h-auto py-3 w-full hover:bg-primary/5 hover:border-primary/30 transition-colors"
-                            >
-                              {demoLoading === key ? (
-                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                              ) : (
-                                <Icon className="h-4 w-4 text-primary" />
-                              )}
-                              <span className="text-xs font-medium">{account.label}</span>
-                              <span className="text-[9px] text-muted-foreground">{account.description}</span>
-                            </Button>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </div>
                 </CardContent>
               </TabsContent>
 
