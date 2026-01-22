@@ -6,20 +6,23 @@ import { database } from "@/lib/firebase";
 import { Header } from "@/components/Header";
 import { DeviceCard } from "@/components/DeviceCard";
 import { Button } from "@/components/ui/button";
-import { Calendar, Loader2, PowerOff } from "lucide-react";
+import { Calendar, Loader2, PowerOff, Power } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { triggerHapticHeavy } from "@/lib/haptics";
 
 export default function DeviceControls() {
   const { pondId } = useParams<{ pondId: string }>();
   const navigate = useNavigate();
   const { ponds, isLoading: pondsLoading } = usePondData();
   const [isAllOff, setIsAllOff] = useState(false);
+  const [isAllOn, setIsAllOn] = useState(false);
 
   const pond = ponds.find((p) => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
   const stablePondId = pondId || pond?.id || "pond1";
 
   const handleAllOff = async () => {
+    triggerHapticHeavy();
     setIsAllOff(true);
     try {
       const devices = ["motor", "aerator", "light"];
@@ -34,6 +37,25 @@ export default function DeviceControls() {
       toast.error("Failed to turn off devices");
     } finally {
       setIsAllOff(false);
+    }
+  };
+
+  const handleAllOn = async () => {
+    triggerHapticHeavy();
+    setIsAllOn(true);
+    try {
+      const devices = ["motor", "aerator", "light"];
+      await Promise.all(
+        devices.map(async (device) => {
+          await set(ref(database, `ponds/${stablePondId}/devices/${device}/mode`), "manual");
+          await set(ref(database, `ponds/${stablePondId}/devices/${device}/state`), 1);
+        })
+      );
+      toast.success("All devices turned on");
+    } catch (error) {
+      toast.error("Failed to turn on devices");
+    } finally {
+      setIsAllOn(false);
     }
   };
 
@@ -61,34 +83,19 @@ export default function DeviceControls() {
       <Header title="Device Controls" showBack />
 
       <main className="p-4 max-w-md mx-auto">
-        {/* Header with All Off Button */}
+        {/* Header with Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
-          className="flex items-center justify-between mb-5"
+          className="mb-5"
         >
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">{pond.name}</h2>
-            <p className="text-xs text-muted-foreground">3 devices connected</p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* All Off Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAllOff}
-              disabled={isAllOff}
-              className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive gap-1.5"
-            >
-              {isAllOff ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <PowerOff className="h-4 w-4" />
-              )}
-              All Off
-            </Button>
+          {/* Pond Info */}
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">{pond.name}</h2>
+              <p className="text-xs text-muted-foreground">3 devices connected</p>
+            </div>
 
             <Button
               variant="ghost"
@@ -98,6 +105,41 @@ export default function DeviceControls() {
             >
               <Calendar className="h-4 w-4" />
               Schedules
+            </Button>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex gap-3">
+            {/* All On Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAllOn}
+              disabled={isAllOn || isAllOff}
+              className="flex-1 text-status-safe border-status-safe/30 hover:bg-status-safe/10 hover:text-status-safe gap-2"
+            >
+              {isAllOn ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Power className="h-4 w-4" />
+              )}
+              All On
+            </Button>
+
+            {/* All Off Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAllOff}
+              disabled={isAllOff || isAllOn}
+              className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive gap-2"
+            >
+              {isAllOff ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PowerOff className="h-4 w-4" />
+              )}
+              All Off
             </Button>
           </div>
         </motion.div>
@@ -136,7 +178,7 @@ export default function DeviceControls() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.25, delay: 0.25 }}
         >
-          Tap the circle buttons to control each device
+          Tap the button to toggle each device
         </motion.p>
       </main>
     </div>
