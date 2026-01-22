@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { motion, AnimatePresence } from "framer-motion";
-import { Droplets, Wind, Lightbulb, Zap, Power } from "lucide-react";
+import { Droplets, Wind, Lightbulb, Power } from "lucide-react";
 
 import { database } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
-import { Switch } from "@/components/ui/switch";
+import { triggerHapticMedium } from "@/lib/haptics";
 
 export type StaticDeviceType = "motor" | "aerator" | "light";
 
@@ -22,11 +22,6 @@ interface DeviceMeta {
   icon: typeof Droplets;
   subtitle: string;
   accentHsl: string;
-  accentClass: string;
-  bgClass: string;
-  glowClass: string;
-  buttonOnClass: string;
-  buttonOffClass: string;
 }
 
 function deviceMeta(type: StaticDeviceType): DeviceMeta {
@@ -34,35 +29,20 @@ function deviceMeta(type: StaticDeviceType): DeviceMeta {
     case "motor":
       return {
         icon: Droplets,
-        subtitle: "Water Pump",
+        subtitle: "Water circulation",
         accentHsl: "205,80%,50%",
-        accentClass: "text-[hsl(205,80%,50%)]",
-        bgClass: "bg-[hsl(205,80%,50%)]/10",
-        glowClass: "shadow-[0_0_24px_hsl(205,80%,50%,0.3)]",
-        buttonOnClass: "bg-[hsl(205,80%,50%)] shadow-[0_0_30px_hsl(205,80%,50%,0.5)]",
-        buttonOffClass: "bg-muted hover:bg-muted/80",
       };
     case "aerator":
       return {
         icon: Wind,
-        subtitle: "Aeration System",
+        subtitle: "Oxygen supply",
         accentHsl: "152,60%,48%",
-        accentClass: "text-[hsl(152,60%,48%)]",
-        bgClass: "bg-[hsl(152,60%,48%)]/10",
-        glowClass: "shadow-[0_0_24px_hsl(152,60%,48%,0.3)]",
-        buttonOnClass: "bg-[hsl(152,60%,48%)] shadow-[0_0_30px_hsl(152,60%,48%,0.5)]",
-        buttonOffClass: "bg-muted hover:bg-muted/80",
       };
     case "light":
       return {
         icon: Lightbulb,
-        subtitle: "Pond Lighting",
+        subtitle: "Pond lighting",
         accentHsl: "38,92%,50%",
-        accentClass: "text-[hsl(38,92%,50%)]",
-        bgClass: "bg-[hsl(38,92%,50%)]/10",
-        glowClass: "shadow-[0_0_24px_hsl(38,92%,50%,0.3)]",
-        buttonOnClass: "bg-[hsl(38,92%,50%)] shadow-[0_0_30px_hsl(38,92%,50%,0.5)]",
-        buttonOffClass: "bg-muted hover:bg-muted/80",
       };
   }
 }
@@ -73,7 +53,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   const [isWriting, setIsWriting] = useState(false);
 
   const meta = useMemo(() => deviceMeta(type), [type]);
-  const { icon: Icon, subtitle, accentClass, bgClass, glowClass, buttonOnClass, buttonOffClass } = meta;
+  const { icon: Icon, subtitle } = meta;
 
   useEffect(() => {
     const deviceRef = ref(database, `ponds/${pondId}/devices/${type}`);
@@ -93,22 +73,26 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
     return () => unsubscribe();
   }, [pondId, type]);
 
-  const handleTogglePower = async (turnOn: boolean) => {
-    // Optimistic local UI update
-    setIsOn(turnOn);
+  const handleToggle = async () => {
+    if (mode === "auto" || isWriting) return;
+    
+    triggerHapticMedium();
+    
+    const newState = !isOn;
+    setIsOn(newState);
 
     setIsWriting(true);
     try {
-      await set(ref(database, `ponds/${pondId}/devices/${type}/mode`), "manual");
-      await set(ref(database, `ponds/${pondId}/devices/${type}/state`), turnOn ? 1 : 0);
-      setMode("manual");
+      await set(ref(database, `ponds/${pondId}/devices/${type}/state`), newState ? 1 : 0);
     } finally {
       setIsWriting(false);
     }
   };
 
-  const handleAutoChange = async (checked: boolean) => {
-    const nextMode: DeviceMode = checked ? "auto" : "manual";
+  const handleModeToggle = async () => {
+    triggerHapticMedium();
+    
+    const nextMode: DeviceMode = mode === "auto" ? "manual" : "auto";
     setMode(nextMode);
 
     setIsWriting(true);
@@ -121,137 +105,139 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
 
   const isAuto = mode === "auto";
 
+  // Dynamic button styles based on state
+  const getButtonStyles = () => {
+    if (isAuto) {
+      return "bg-muted/60 text-muted-foreground cursor-not-allowed border-border";
+    }
+    if (isOn) {
+      return "bg-status-safe text-white border-status-safe shadow-[0_4px_20px_hsl(var(--status-safe)/0.4)]";
+    }
+    return "bg-destructive text-white border-destructive shadow-[0_4px_20px_hsl(var(--destructive)/0.3)]";
+  };
+
+  const getStatusBadgeStyles = () => {
+    if (isAuto) {
+      return "bg-primary/10 text-primary border-primary/20";
+    }
+    if (isOn) {
+      return "bg-status-safe/10 text-status-safe border-status-safe/20";
+    }
+    return "bg-destructive/10 text-destructive border-destructive/20";
+  };
+
+  const getStatusText = () => {
+    if (isAuto) return "AUTO";
+    return isOn ? "ON" : "OFF";
+  };
+
   return (
     <motion.div
       layout
       className={cn(
-        "relative rounded-2xl border bg-card p-5 transition-all duration-300",
-        isOn ? glowClass : "shadow-sm",
+        "relative rounded-2xl border bg-card p-5 shadow-sm transition-all duration-300",
+        isOn && !isAuto && "shadow-[0_0_20px_hsl(var(--status-safe)/0.15)]",
         className
       )}
       aria-label={`${title} control`}
     >
-      {/* Top Row: Icon, Title, Status Pill */}
-      <div className="flex items-center justify-between gap-3 mb-5">
-        <div className="flex items-center gap-3">
-          {/* Icon Container */}
-          <div
-            className={cn(
-              "h-12 w-12 rounded-xl flex items-center justify-center transition-colors duration-300",
-              isOn ? bgClass : "bg-muted"
-            )}
-          >
-            <Icon
-              className={cn(
-                "h-6 w-6 transition-colors duration-300",
-                isOn ? accentClass : "text-muted-foreground"
-              )}
-              strokeWidth={2}
-            />
-          </div>
-
-          {/* Title & Subtitle */}
-          <div>
-            <h3 className="text-base font-semibold text-foreground leading-tight">
-              {title}
-            </h3>
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
-          </div>
-        </div>
-
-        {/* Status Pill */}
+      {/* Status Badge - Top Right */}
+      <div className="absolute top-4 right-4">
         <AnimatePresence mode="wait">
           <motion.div
-            key={isOn ? "on" : "off"}
-            initial={{ opacity: 0, scale: 0.9 }}
+            key={getStatusText()}
+            initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
+            exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: 0.15 }}
             className={cn(
-              "px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-colors duration-300",
-              isOn
-                ? cn(bgClass, accentClass)
-                : "bg-muted text-muted-foreground"
+              "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
+              getStatusBadgeStyles()
             )}
           >
-            {isOn ? "ON" : "OFF"}
+            {getStatusText()}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Large Circular ON/OFF Buttons */}
-      <div className="flex items-center justify-center gap-6 py-4">
-        {/* OFF Button */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => handleTogglePower(false)}
-          disabled={isWriting}
+      {/* Device Info Row */}
+      <div className="flex items-center gap-4 mb-6">
+        {/* Icon Container */}
+        <div
           className={cn(
-            "h-20 w-20 rounded-full flex flex-col items-center justify-center transition-all duration-300 border-2",
-            !isOn
-              ? "bg-muted/80 border-foreground/20 text-foreground"
-              : "bg-background border-border text-muted-foreground hover:border-foreground/30"
+            "h-14 w-14 rounded-xl flex items-center justify-center transition-all duration-300",
+            isOn && !isAuto
+              ? "bg-status-safe/10"
+              : isAuto
+              ? "bg-primary/10"
+              : "bg-muted"
           )}
-          aria-label={`Turn ${title} off`}
         >
-          <Power className="h-7 w-7 mb-1" strokeWidth={2} />
-          <span className="text-[10px] font-bold uppercase tracking-wide">Off</span>
-        </motion.button>
+          <Icon
+            className={cn(
+              "h-7 w-7 transition-colors duration-300",
+              isOn && !isAuto
+                ? "text-status-safe"
+                : isAuto
+                ? "text-primary"
+                : "text-muted-foreground"
+            )}
+            strokeWidth={2}
+          />
+        </div>
 
-        {/* ON Button */}
+        {/* Title & Subtitle */}
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-foreground leading-tight">
+            {title}
+          </h3>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+
+      {/* Single Large Toggle Button */}
+      <div className="flex justify-center py-2">
         <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => handleTogglePower(true)}
-          disabled={isWriting}
+          whileHover={!isAuto ? { scale: 1.03 } : undefined}
+          whileTap={!isAuto ? { scale: 0.97 } : undefined}
+          onClick={handleToggle}
+          disabled={isWriting || isAuto}
           className={cn(
-            "h-20 w-20 rounded-full flex flex-col items-center justify-center transition-all duration-300 border-2",
-            isOn
-              ? cn(buttonOnClass, "border-transparent text-white")
-              : "bg-background border-border text-muted-foreground hover:border-foreground/30"
+            "h-20 w-full max-w-[200px] rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 border-2 font-bold text-lg",
+            getButtonStyles()
           )}
-          aria-label={`Turn ${title} on`}
+          aria-label={isAuto ? `${title} in auto mode` : `Toggle ${title}`}
         >
-          <Power className="h-7 w-7 mb-1" strokeWidth={2} />
-          <span className="text-[10px] font-bold uppercase tracking-wide">On</span>
+          <Power className="h-6 w-6" strokeWidth={2.5} />
+          <span className="uppercase tracking-wide">
+            {isAuto ? "Auto Mode" : isOn ? "ON" : "OFF"}
+          </span>
         </motion.button>
       </div>
 
       {/* Divider */}
       <div className="h-px bg-border my-4" />
 
-      {/* Bottom Row: Auto Mode Toggle */}
+      {/* Mode Toggle Row */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Zap
-            className={cn(
-              "h-4 w-4 transition-colors duration-300",
-              isAuto ? "text-device-auto" : "text-muted-foreground"
-            )}
-          />
-          <span className="text-sm text-muted-foreground font-medium">
-            Auto Mode
-          </span>
-        </div>
+        <span className="text-sm text-muted-foreground font-medium">
+          Control Mode
+        </span>
 
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "text-xs font-medium uppercase tracking-wide transition-colors duration-200",
-              isAuto ? "text-device-auto" : "text-muted-foreground"
-            )}
-          >
-            {isAuto ? "Auto" : "Manual"}
-          </span>
-          <Switch
-            checked={isAuto}
-            onCheckedChange={handleAutoChange}
-            disabled={isWriting}
-            aria-label={`Toggle ${title} auto mode`}
-            className="h-5 w-9 data-[state=checked]:bg-device-auto"
-          />
-        </div>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={handleModeToggle}
+          disabled={isWriting}
+          className={cn(
+            "px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 border",
+            isAuto
+              ? "bg-primary/10 text-primary border-primary/20"
+              : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+          )}
+        >
+          {isAuto ? "AUTO" : "MANUAL"}
+        </motion.button>
       </div>
 
       {/* Writing indicator overlay */}
