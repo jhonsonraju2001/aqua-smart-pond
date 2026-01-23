@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { motion, AnimatePresence } from "framer-motion";
-import { Droplets, Wind, Lightbulb, Power } from "lucide-react";
+import { Droplets, Wind, Lightbulb, Power, Clock } from "lucide-react";
 
 import { database } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ type DeviceMode = "manual" | "auto";
 interface DeviceMeta {
   icon: typeof Droplets;
   subtitle: string;
-  accentHsl: string;
+  nextSchedule: string;
 }
 
 function deviceMeta(type: StaticDeviceType): DeviceMeta {
@@ -30,147 +30,21 @@ function deviceMeta(type: StaticDeviceType): DeviceMeta {
       return {
         icon: Droplets,
         subtitle: "Water circulation",
-        accentHsl: "205,80%,50%",
+        nextSchedule: "06:00 AM - ON",
       };
     case "aerator":
       return {
         icon: Wind,
         subtitle: "Oxygen supply",
-        accentHsl: "152,60%,48%",
+        nextSchedule: "05:30 AM - ON",
       };
     case "light":
       return {
         icon: Lightbulb,
         subtitle: "Pond lighting",
-        accentHsl: "38,92%,50%",
+        nextSchedule: "07:00 PM - ON",
       };
   }
-}
-
-// Water Wave Animation Component
-function WaterWaveAnimation() {
-  return (
-    <div className="absolute inset-0 overflow-hidden rounded-2xl">
-      <div className="absolute inset-0 bg-gradient-to-r from-[hsl(205,80%,50%/0.15)] to-[hsl(205,80%,60%/0.25)]" />
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 h-full"
-        style={{ background: 'linear-gradient(180deg, transparent 0%, hsl(205,80%,50%/0.1) 50%, hsl(205,80%,50%/0.2) 100%)' }}
-      >
-        {/* Wave 1 */}
-        <motion.svg
-          className="absolute bottom-0 w-[200%] h-16"
-          viewBox="0 0 1200 120"
-          preserveAspectRatio="none"
-          animate={{ x: [0, -600] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-        >
-          <path
-            d="M0,60 C150,120 350,0 600,60 C850,120 1050,0 1200,60 L1200,120 L0,120 Z"
-            fill="hsl(205,80%,50%/0.3)"
-          />
-        </motion.svg>
-        {/* Wave 2 */}
-        <motion.svg
-          className="absolute bottom-0 w-[200%] h-12"
-          viewBox="0 0 1200 120"
-          preserveAspectRatio="none"
-          animate={{ x: [-300, -900] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-        >
-          <path
-            d="M0,80 C200,40 400,100 600,60 C800,20 1000,80 1200,60 L1200,120 L0,120 Z"
-            fill="hsl(205,80%,60%/0.25)"
-          />
-        </motion.svg>
-      </motion.div>
-    </div>
-  );
-}
-
-// Bubble Animation Component
-function BubbleAnimation() {
-  const bubbles = useMemo(() => 
-    Array.from({ length: 12 }, (_, i) => ({
-      id: i,
-      left: `${10 + Math.random() * 80}%`,
-      size: 4 + Math.random() * 8,
-      delay: Math.random() * 2,
-      duration: 2 + Math.random() * 2,
-    })), []
-  );
-
-  return (
-    <div className="absolute inset-0 overflow-hidden rounded-2xl">
-      <div className="absolute inset-0 bg-gradient-to-t from-[hsl(152,60%,48%/0.15)] to-[hsl(152,60%,60%/0.08)]" />
-      {bubbles.map((bubble) => (
-        <motion.div
-          key={bubble.id}
-          className="absolute rounded-full bg-[hsl(152,60%,55%/0.4)] border border-[hsl(152,60%,60%/0.3)]"
-          style={{
-            left: bubble.left,
-            width: bubble.size,
-            height: bubble.size,
-          }}
-          initial={{ bottom: -20, opacity: 0 }}
-          animate={{ 
-            bottom: ['0%', '100%'],
-            opacity: [0, 0.8, 0.8, 0],
-            x: [0, Math.random() * 20 - 10, Math.random() * 20 - 10, 0]
-          }}
-          transition={{
-            duration: bubble.duration,
-            delay: bubble.delay,
-            repeat: Infinity,
-            ease: "easeOut"
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-// Light Glow Animation Component
-function LightGlowAnimation() {
-  return (
-    <div className="absolute inset-0 overflow-hidden rounded-2xl">
-      <motion.div
-        className="absolute inset-0"
-        style={{
-          background: 'radial-gradient(circle at center, hsl(38,92%,50%/0.25) 0%, hsl(38,92%,50%/0.1) 40%, transparent 70%)',
-        }}
-        animate={{
-          opacity: [0.6, 1, 0.6],
-          scale: [0.95, 1.05, 0.95],
-        }}
-        transition={{
-          duration: 2,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
-      />
-      {/* Light rays */}
-      <motion.div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-      >
-        {[0, 45, 90, 135].map((angle) => (
-          <motion.div
-            key={angle}
-            className="absolute top-1/2 left-1/2 w-1 h-16 origin-bottom"
-            style={{ 
-              transform: `rotate(${angle}deg) translateX(-50%)`,
-              background: 'linear-gradient(to top, hsl(38,92%,50%/0.3), transparent)'
-            }}
-            animate={{ opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: angle * 0.01 }}
-          />
-        ))}
-      </motion.div>
-      {/* Warm glow overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[hsl(38,92%,50%/0.08)] to-[hsl(38,92%,60%/0.15)]" />
-    </div>
-  );
 }
 
 export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) {
@@ -179,7 +53,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   const [isWriting, setIsWriting] = useState(false);
 
   const meta = useMemo(() => deviceMeta(type), [type]);
-  const { icon: Icon, subtitle } = meta;
+  const { icon: Icon, subtitle, nextSchedule } = meta;
 
   useEffect(() => {
     const deviceRef = ref(database, `ponds/${pondId}/devices/${type}`);
@@ -230,27 +104,23 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   };
 
   const isAuto = mode === "auto";
-  const showAnimation = isOn && !isAuto;
 
-  // Dynamic button styles based on state
+  // Get border and text colors for button based on state
   const getButtonStyles = () => {
     if (isAuto) {
-      return "bg-muted/60 text-muted-foreground cursor-not-allowed border-border";
+      return "border-muted-foreground/40 text-muted-foreground bg-muted/30";
     }
     if (isOn) {
-      return "bg-status-safe text-white border-status-safe shadow-[0_4px_20px_hsl(var(--status-safe)/0.4)]";
+      return "border-status-safe text-status-safe bg-status-safe/5 hover:bg-status-safe/10";
     }
-    return "bg-destructive text-white border-destructive shadow-[0_4px_20px_hsl(var(--destructive)/0.3)]";
+    return "border-destructive text-destructive bg-destructive/5 hover:bg-destructive/10";
   };
 
-  const getStatusBadgeStyles = () => {
-    if (isAuto) {
-      return "bg-primary/10 text-primary border-primary/20";
-    }
-    if (isOn) {
-      return "bg-status-safe/10 text-status-safe border-status-safe/20";
-    }
-    return "bg-destructive/10 text-destructive border-destructive/20";
+  // Get status dot color
+  const getStatusDotColor = () => {
+    if (isAuto) return "bg-muted-foreground";
+    if (isOn) return "bg-status-safe";
+    return "bg-destructive";
   };
 
   const getStatusText = () => {
@@ -258,51 +128,27 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
     return isOn ? "ON" : "OFF";
   };
 
-  // Render device-specific animation
-  const renderAnimation = () => {
-    if (!showAnimation) return null;
-    
-    switch (type) {
-      case "motor":
-        return <WaterWaveAnimation />;
-      case "aerator":
-        return <BubbleAnimation />;
-      case "light":
-        return <LightGlowAnimation />;
-      default:
-        return null;
+  // Mode badge styles
+  const getModeBadgeStyles = () => {
+    if (isAuto) {
+      return "border-muted-foreground/30 text-muted-foreground bg-muted/20";
     }
+    return "border-primary/30 text-primary bg-primary/5";
   };
 
   return (
     <motion.div
       layout
       className={cn(
-        "relative rounded-2xl border bg-card p-5 shadow-sm transition-all duration-300 overflow-hidden",
-        isOn && !isAuto && "shadow-lg",
+        "relative rounded-2xl border bg-card p-5 shadow-sm transition-all duration-300",
         className
       )}
       aria-label={`${title} control`}
     >
-      {/* Device-specific Animation Background */}
-      <AnimatePresence>
-        {showAnimation && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="absolute inset-0 z-0"
-          >
-            {renderAnimation()}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Content Layer */}
-      <div className="relative z-10">
-        {/* Status Badge - Top Right */}
-        <div className="absolute top-0 right-0">
+      <div className="relative">
+        {/* Status Badge with Dot - Top Right */}
+        <div className="absolute top-0 right-0 flex items-center gap-2">
           <AnimatePresence mode="wait">
             <motion.div
               key={getStatusText()}
@@ -310,37 +156,37 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.15 }}
-              className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border backdrop-blur-sm",
-                getStatusBadgeStyles()
-              )}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-muted/30"
             >
-              {getStatusText()}
+              <span className={cn("h-2 w-2 rounded-full", getStatusDotColor())} />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {getStatusText()}
+              </span>
             </motion.div>
           </AnimatePresence>
         </div>
 
         {/* Device Info Row */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4 mb-5">
           {/* Icon Container */}
           <div
             className={cn(
-              "h-14 w-14 rounded-xl flex items-center justify-center transition-all duration-300 backdrop-blur-sm",
+              "h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 border",
               isOn && !isAuto
-                ? "bg-status-safe/20"
+                ? "border-status-safe/30 bg-status-safe/10"
                 : isAuto
-                ? "bg-primary/10"
-                : "bg-muted"
+                ? "border-muted-foreground/20 bg-muted/50"
+                : "border-border bg-muted/30"
             )}
           >
             <Icon
               className={cn(
-                "h-7 w-7 transition-colors duration-300",
+                "h-6 w-6 transition-colors duration-300",
                 isOn && !isAuto
                   ? "text-status-safe"
                   : isAuto
-                  ? "text-primary"
-                  : "text-muted-foreground"
+                  ? "text-muted-foreground"
+                  : "text-foreground"
               )}
               strokeWidth={2}
             />
@@ -348,35 +194,41 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
 
           {/* Title & Subtitle */}
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-foreground leading-tight">
+            <h3 className="text-base font-semibold text-foreground leading-tight">
               {title}
             </h3>
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
           </div>
         </div>
 
-        {/* Single Large Toggle Button */}
-        <div className="flex justify-center py-2">
-          <motion.button
-            whileHover={!isAuto ? { scale: 1.03 } : undefined}
-            whileTap={!isAuto ? { scale: 0.97 } : undefined}
-            onClick={handleToggle}
-            disabled={isWriting || isAuto}
-            className={cn(
-              "h-20 w-full max-w-[200px] rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 border-2 font-bold text-lg backdrop-blur-sm",
-              getButtonStyles()
-            )}
-            aria-label={isAuto ? `${title} in auto mode` : `Toggle ${title}`}
-          >
-            <Power className="h-6 w-6" strokeWidth={2.5} />
-            <span className="uppercase tracking-wide">
-              {isAuto ? "Auto Mode" : isOn ? "ON" : "OFF"}
-            </span>
-          </motion.button>
+        {/* Schedule Preview Indicator */}
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-muted/30 border border-border/50">
+          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Next:</span>
+          <span className="text-xs font-medium text-foreground">{nextSchedule}</span>
         </div>
 
+        {/* Single Large Toggle Button - Outline Only */}
+        <motion.button
+          whileHover={!isAuto ? { scale: 1.01 } : undefined}
+          whileTap={!isAuto ? { scale: 0.99 } : undefined}
+          onClick={handleToggle}
+          disabled={isWriting || isAuto}
+          className={cn(
+            "h-16 w-full rounded-xl flex items-center justify-center gap-3 transition-all duration-300 border-2 font-bold text-base",
+            getButtonStyles(),
+            isAuto && "cursor-not-allowed opacity-60"
+          )}
+          aria-label={isAuto ? `${title} in auto mode` : `Toggle ${title}`}
+        >
+          <Power className="h-5 w-5" strokeWidth={2.5} />
+          <span className="uppercase tracking-wide">
+            {isAuto ? "Auto Mode" : isOn ? "ON" : "OFF"}
+          </span>
+        </motion.button>
+
         {/* Divider */}
-        <div className="h-px bg-border/50 my-4 backdrop-blur-sm" />
+        <div className="h-px bg-border/50 my-4" />
 
         {/* Mode Toggle Row */}
         <div className="flex items-center justify-between">
@@ -390,10 +242,8 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
             onClick={handleModeToggle}
             disabled={isWriting}
             className={cn(
-              "px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 border backdrop-blur-sm",
-              isAuto
-                ? "bg-primary/10 text-primary border-primary/20"
-                : "bg-muted/80 text-muted-foreground border-border hover:bg-muted"
+              "px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-300 border uppercase tracking-wide",
+              getModeBadgeStyles()
             )}
           >
             {isAuto ? "AUTO" : "MANUAL"}
@@ -408,9 +258,9 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-background/50 rounded-2xl flex items-center justify-center backdrop-blur-[2px] z-20"
+            className="absolute inset-0 bg-background/50 rounded-2xl flex items-center justify-center z-20"
           >
-            <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </motion.div>
         )}
       </AnimatePresence>
