@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Droplets, Wind, Lightbulb, Power, Clock } from "lucide-react";
+import { Droplets, Wind, Lightbulb, Power, Clock, Camera, ChevronRight } from "lucide-react";
 
 import { database } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { triggerHapticMedium } from "@/lib/haptics";
 
-export type StaticDeviceType = "motor" | "aerator" | "light";
+export type StaticDeviceType = "motor" | "aerator" | "light" | "camera";
 
 interface DeviceCardProps {
   pondId: string;
@@ -22,6 +23,7 @@ interface DeviceMeta {
   icon: typeof Droplets;
   subtitle: string;
   nextSchedule: string;
+  hasSchedule: boolean;
 }
 
 function deviceMeta(type: StaticDeviceType): DeviceMeta {
@@ -31,29 +33,45 @@ function deviceMeta(type: StaticDeviceType): DeviceMeta {
         icon: Droplets,
         subtitle: "Water circulation",
         nextSchedule: "06:00 AM - ON",
+        hasSchedule: true,
       };
     case "aerator":
       return {
         icon: Wind,
         subtitle: "Oxygen supply",
         nextSchedule: "05:30 AM - ON",
+        hasSchedule: true,
       };
     case "light":
       return {
         icon: Lightbulb,
         subtitle: "Pond lighting",
         nextSchedule: "07:00 PM - ON",
+        hasSchedule: true,
+      };
+    case "camera":
+      return {
+        icon: Camera,
+        subtitle: "Live monitoring",
+        nextSchedule: "Always On",
+        hasSchedule: false,
       };
   }
 }
 
 export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) {
+  const navigate = useNavigate();
   const [isOn, setIsOn] = useState(false);
   const [mode, setMode] = useState<DeviceMode>("manual");
   const [isWriting, setIsWriting] = useState(false);
 
   const meta = useMemo(() => deviceMeta(type), [type]);
-  const { icon: Icon, subtitle, nextSchedule } = meta;
+  const { icon: Icon, subtitle, nextSchedule, hasSchedule } = meta;
+
+  const handleScheduleClick = () => {
+    triggerHapticMedium();
+    navigate(`/pond/${pondId}/schedules`);
+  };
 
   useEffect(() => {
     const deviceRef = ref(database, `ponds/${pondId}/devices/${type}`);
@@ -201,12 +219,23 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
           </div>
         </div>
 
-        {/* Schedule Preview Indicator */}
-        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-muted/30 border border-border/50">
+        {/* Schedule Preview Indicator - Tappable */}
+        <motion.button
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          onClick={hasSchedule ? handleScheduleClick : undefined}
+          className={cn(
+            "flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-muted/30 border border-border/50 w-full transition-colors",
+            hasSchedule && "hover:bg-muted/50 hover:border-primary/30 cursor-pointer"
+          )}
+        >
           <Clock className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">Next:</span>
-          <span className="text-xs font-medium text-foreground">{nextSchedule}</span>
-        </div>
+          <span className="text-xs font-medium text-foreground flex-1 text-left">{nextSchedule}</span>
+          {hasSchedule && (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </motion.button>
 
         {/* Single Large Toggle Button - Outline Only */}
         <motion.button

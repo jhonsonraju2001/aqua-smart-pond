@@ -94,7 +94,7 @@ export default function DeviceControls() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-foreground">{pond.name}</h2>
-              <p className="text-xs text-muted-foreground">3 devices connected</p>
+              <p className="text-xs text-muted-foreground">4 devices connected</p>
             </div>
 
             <Button
@@ -168,6 +168,14 @@ export default function DeviceControls() {
             transition={{ duration: 0.3, delay: 0.15 }}
           >
             <DeviceCard pondId={stablePondId} type="light" title="Light" />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            <DeviceCard pondId={stablePondId} type="camera" title="CC Camera" />
           </motion.div>
         </div>
 
