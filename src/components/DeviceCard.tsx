@@ -30,29 +30,13 @@ interface DeviceMeta {
 function deviceMeta(type: StaticDeviceType): DeviceMeta {
   switch (type) {
     case "motor":
-      return {
-        icon: Droplets,
-        subtitle: "Water circulation",
-        hasSchedule: true,
-      };
+      return { icon: Droplets, subtitle: "Water circulation", hasSchedule: true };
     case "aerator":
-      return {
-        icon: Wind,
-        subtitle: "Oxygen supply",
-        hasSchedule: true,
-      };
+      return { icon: Wind, subtitle: "Oxygen supply", hasSchedule: true };
     case "light":
-      return {
-        icon: Lightbulb,
-        subtitle: "Pond lighting",
-        hasSchedule: true,
-      };
+      return { icon: Lightbulb, subtitle: "Pond lighting", hasSchedule: true };
     case "camera":
-      return {
-        icon: Camera,
-        subtitle: "Live monitoring",
-        hasSchedule: false,
-      };
+      return { icon: Camera, subtitle: "Live monitoring", hasSchedule: false };
   }
 }
 
@@ -66,7 +50,6 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   const meta = useMemo(() => deviceMeta(type), [type]);
   const { icon: Icon, subtitle, hasSchedule } = meta;
 
-  // Fetch real schedule data from Firebase
   const { nextSchedule, isLoading: scheduleLoading } = useDeviceSchedule(pondId, type);
 
   const handleScheduleClick = () => {
@@ -80,10 +63,8 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   };
 
   useEffect(() => {
-    if (type === "camera") return; // Camera doesn't have state in Firebase
-
+    if (type === "camera") return;
     const deviceRef = ref(database, `ponds/${pondId}/devices/${type}`);
-
     const unsubscribe = onValue(
       deviceRef,
       (snap) => {
@@ -91,11 +72,8 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
         setIsOn((val?.state ?? 0) === 1);
         setMode(val?.mode ?? "manual");
       },
-      () => {
-        // Keep card mounted and usable; fall back to local defaults.
-      }
+      () => {}
     );
-
     return () => unsubscribe();
   }, [pondId, type]);
 
@@ -104,14 +82,11 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
       handleCameraClick();
       return;
     }
-
     if (mode === "auto" || isWriting) return;
     
     triggerHapticMedium();
-    
     const newState = !isOn;
     setIsOn(newState);
-
     setIsWriting(true);
     try {
       await set(ref(database, `ponds/${pondId}/devices/${type}/state`), newState ? 1 : 0);
@@ -122,12 +97,9 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
 
   const handleModeToggle = async () => {
     if (type === "camera") return;
-
     triggerHapticMedium();
-    
     const nextMode: DeviceMode = mode === "auto" ? "manual" : "auto";
     setMode(nextMode);
-
     setIsWriting(true);
     try {
       await set(ref(database, `ponds/${pondId}/devices/${type}/mode`), nextMode);
@@ -139,21 +111,15 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   const isAuto = mode === "auto";
   const isCamera = type === "camera";
 
-  // Get border and text colors for button based on state
-  const getButtonStyles = () => {
-    if (isCamera) {
-      return "border-primary text-primary bg-primary/5 hover:bg-primary/10";
-    }
-    if (isAuto) {
-      return "border-muted-foreground/40 text-muted-foreground bg-muted/30";
-    }
-    if (isOn) {
-      return "border-status-safe text-status-safe bg-status-safe/5 hover:bg-status-safe/10";
-    }
-    return "border-destructive text-destructive bg-destructive/5 hover:bg-destructive/10";
+  // Dynamic button background colors
+  const getButtonBackground = () => {
+    if (isCamera) return "bg-primary hover:bg-primary/90";
+    if (isAuto) return "bg-muted-foreground/60 cursor-not-allowed";
+    if (isOn) return "bg-status-safe hover:bg-status-safe/90";
+    return "bg-destructive hover:bg-destructive/90";
   };
 
-  // Get status dot color
+  // Status badge colors
   const getStatusDotColor = () => {
     if (isCamera) return "bg-primary";
     if (isAuto) return "bg-muted-foreground";
@@ -169,13 +135,10 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
 
   // Mode badge styles
   const getModeBadgeStyles = () => {
-    if (isAuto) {
-      return "border-muted-foreground/30 text-muted-foreground bg-muted/20";
-    }
-    return "border-primary/30 text-primary bg-primary/5";
+    if (isAuto) return "bg-muted-foreground/20 text-muted-foreground border-muted-foreground/30";
+    return "bg-primary/10 text-primary border-primary/30";
   };
 
-  // Get schedule display text
   const getScheduleDisplay = () => {
     if (isCamera) return "Always On";
     if (scheduleLoading) return "Loading...";
@@ -188,15 +151,15 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
       <motion.div
         layout
         className={cn(
-          "relative rounded-2xl border bg-card p-5 shadow-sm transition-all duration-300",
+          "relative rounded-2xl border bg-card p-5 shadow-soft transition-all duration-300",
           className
         )}
         aria-label={`${title} control`}
       >
         {/* Content Layer */}
         <div className="relative">
-          {/* Status Badge with Dot - Top Right */}
-          <div className="absolute top-0 right-0 flex items-center gap-2">
+          {/* Status Badge - Top Right */}
+          <div className="absolute top-0 right-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={getStatusText()}
@@ -220,19 +183,16 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
 
           {/* Device Info Row */}
           <div className="flex items-center gap-4 mb-5">
-            {/* Icon Container */}
-            <div
-              className={cn(
-                "h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 border",
-                isCamera
-                  ? "border-primary/30 bg-primary/10"
-                  : isOn && !isAuto
-                  ? "border-status-safe/30 bg-status-safe/10"
-                  : isAuto
-                  ? "border-muted-foreground/20 bg-muted/50"
-                  : "border-border bg-muted/30"
-              )}
-            >
+            <div className={cn(
+              "h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 border",
+              isCamera
+                ? "border-primary/30 bg-primary/10"
+                : isOn && !isAuto
+                ? "border-status-safe/30 bg-status-safe/10"
+                : isAuto
+                ? "border-muted-foreground/20 bg-muted/50"
+                : "border-border bg-muted/30"
+            )}>
               <Icon
                 className={cn(
                   "h-6 w-6 transition-colors duration-300",
@@ -247,17 +207,13 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
                 strokeWidth={2}
               />
             </div>
-
-            {/* Title & Subtitle */}
             <div className="flex-1">
-              <h3 className="text-base font-semibold text-foreground leading-tight">
-                {title}
-              </h3>
+              <h3 className="text-base font-semibold text-foreground leading-tight">{title}</h3>
               <p className="text-xs text-muted-foreground">{subtitle}</p>
             </div>
           </div>
 
-          {/* Schedule Preview Indicator - Tappable */}
+          {/* Schedule Preview - Tappable */}
           <motion.button
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
@@ -272,68 +228,72 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
             ) : (
               <Clock className="h-3.5 w-3.5 text-muted-foreground" />
             )}
-            <span className="text-xs text-muted-foreground">
-              {isCamera ? "Status:" : "Next:"}
-            </span>
-            <span className="text-xs font-medium text-foreground flex-1 text-left">
-              {getScheduleDisplay()}
-            </span>
-            {(hasSchedule || isCamera) && (
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
+            <span className="text-xs text-muted-foreground">{isCamera ? "Status:" : "Next:"}</span>
+            <span className="text-xs font-medium text-foreground flex-1 text-left">{getScheduleDisplay()}</span>
+            {(hasSchedule || isCamera) && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
           </motion.button>
 
-          {/* Single Large Toggle Button - Outline Only */}
+          {/* Single Large Toggle Button with Dynamic Background */}
           <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
+            whileHover={{ scale: isAuto && !isCamera ? 1 : 1.01 }}
+            whileTap={{ scale: isAuto && !isCamera ? 1 : 0.98 }}
             onClick={handleToggle}
             disabled={isWriting || (isAuto && !isCamera)}
             className={cn(
-              "h-16 w-full rounded-xl flex items-center justify-center gap-3 transition-all duration-300 border-2 font-bold text-base",
-              getButtonStyles(),
-              isAuto && !isCamera && "cursor-not-allowed opacity-60"
+              "h-16 w-full rounded-xl flex items-center justify-center gap-3 transition-all duration-300 text-white font-bold text-base shadow-md",
+              getButtonBackground()
             )}
             aria-label={isCamera ? "View camera feed" : isAuto ? `${title} in auto mode` : `Toggle ${title}`}
           >
-            {isCamera ? (
-              <>
-                <Video className="h-5 w-5" strokeWidth={2.5} />
-                <span className="uppercase tracking-wide">View Feed</span>
-              </>
-            ) : (
-              <>
-                <Power className="h-5 w-5" strokeWidth={2.5} />
-                <span className="uppercase tracking-wide">
-                  {isAuto ? "Auto Mode" : isOn ? "ON" : "OFF"}
-                </span>
-              </>
-            )}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={isCamera ? "camera" : isAuto ? "auto" : isOn ? "on" : "off"}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.15 }}
+                className="flex items-center gap-3"
+              >
+                {isCamera ? (
+                  <>
+                    <Video className="h-5 w-5" strokeWidth={2.5} />
+                    <span className="uppercase tracking-wide">View Feed</span>
+                  </>
+                ) : isAuto ? (
+                  <>
+                    <Power className="h-5 w-5" strokeWidth={2.5} />
+                    <span className="uppercase tracking-wide">Auto Mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Power className="h-5 w-5" strokeWidth={2.5} />
+                    <span className="uppercase tracking-wide">{isOn ? "ON" : "OFF"}</span>
+                  </>
+                )}
+              </motion.div>
+            </AnimatePresence>
           </motion.button>
 
-          {/* Divider - Hide for camera */}
-          {!isCamera && <div className="h-px bg-border/50 my-4" />}
-
-          {/* Mode Toggle Row - Hide for camera */}
+          {/* Divider & Mode Toggle - Hide for camera */}
           {!isCamera && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground font-medium">
-                Control Mode
-              </span>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleModeToggle}
-                disabled={isWriting}
-                className={cn(
-                  "px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-300 border uppercase tracking-wide",
-                  getModeBadgeStyles()
-                )}
-              >
-                {isAuto ? "AUTO" : "MANUAL"}
-              </motion.button>
-            </div>
+            <>
+              <div className="h-px bg-border/50 my-4" />
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground font-medium">Control Mode</span>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleModeToggle}
+                  disabled={isWriting}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-300 border uppercase tracking-wide",
+                    getModeBadgeStyles()
+                  )}
+                >
+                  {isAuto ? "AUTO" : "MANUAL"}
+                </motion.button>
+              </div>
+            </>
           )}
         </div>
 
@@ -352,7 +312,6 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
         </AnimatePresence>
       </motion.div>
 
-      {/* Camera Viewer Dialog */}
       {isCamera && (
         <CameraViewerDialog
           open={cameraDialogOpen}

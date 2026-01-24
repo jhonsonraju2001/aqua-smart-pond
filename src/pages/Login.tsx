@@ -205,6 +205,49 @@ export default function Login() {
                       )}
                     </Button>
                   </form>
+
+                  {/* Demo Accounts */}
+                  <div className="mt-6 pt-4 border-t border-border">
+                    <p className="text-xs text-muted-foreground text-center mb-3">Quick Demo Access</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setLoginEmail('admin@aquafarm.demo');
+                          setLoginPassword('demo123');
+                        }}
+                        className="text-xs h-9"
+                      >
+                        Admin
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setLoginEmail('farmer@aquafarm.demo');
+                          setLoginPassword('demo123');
+                        }}
+                        className="text-xs h-9"
+                      >
+                        Farmer
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setLoginEmail('user@aquafarm.demo');
+                          setLoginPassword('demo123');
+                        }}
+                        className="text-xs h-9"
+                      >
+                        User
+                      </Button>
+                    </div>
+                  </div>
                 </CardContent>
               </TabsContent>
 
