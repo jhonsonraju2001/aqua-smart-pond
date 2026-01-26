@@ -1,9 +1,16 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { usePondData, useSensorData } from '@/hooks/usePondData';
+import { useState } from 'react';
+import { usePondData } from '@/hooks/usePondData';
+import { useScheduleManager } from '@/hooks/useScheduleManager';
+import { useUserSettings } from '@/hooks/useUserSettings';
 import { Header } from '@/components/Header';
+import { ScheduleStatusBadge } from '@/components/ScheduleStatusBadge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { 
   Clock,
   Plus,
@@ -12,11 +19,17 @@ import {
   Droplets,
   Lightbulb,
   Bell,
-  Trash2
+  Trash2,
+  Edit2,
+  Save,
+  X,
+  AlertTriangle,
+  Info
 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { Schedule, DAYS_OF_WEEK, formatDays, formatTime12h, WEEKDAYS, ALL_DAYS } from '@/types/schedule';
 import {
   Dialog,
   DialogContent,
@@ -24,8 +37,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -33,68 +44,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
-interface Schedule {
-  id: string;
-  deviceId: string;
-  deviceName: string;
-  deviceType: string;
-  startTime: string;
-  endTime: string;
-  daysOfWeek: number[];
-  isActive: boolean;
-}
+const deviceConfig = [
+  { type: 'motor', name: 'Water Pump', icon: Droplets },
+  { type: 'aerator', name: 'Aerator', icon: Wind },
+  { type: 'light', name: 'Lights', icon: Lightbulb },
+];
 
-const deviceIcons: Record<string, React.ElementType> = {
-  aerator: Wind,
-  pump: Droplets,
-  lights: Lightbulb,
-  buzzer: Bell,
-};
-
-const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const repeatOptions = [
+  { value: 'once', label: 'Once' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'custom', label: 'Custom Days' },
+];
 
 export default function DeviceSchedules() {
   const { pondId } = useParams<{ pondId: string }>();
   const navigate = useNavigate();
   const { ponds, isLoading: pondsLoading } = usePondData();
-  const { devices, isLoading: devicesLoading } = useSensorData(pondId || '');
+  const { settings } = useUserSettings();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-  // Mock schedules - replace with real data
-  const [schedules, setSchedules] = useState<Schedule[]>([
-    {
-      id: '1',
-      deviceId: `${pondId}-aerator`,
-      deviceName: 'Aerator',
-      deviceType: 'aerator',
-      startTime: '06:00',
-      endTime: '18:00',
-      daysOfWeek: [1, 2, 3, 4, 5],
-      isActive: true,
-    },
-    {
-      id: '2',
-      deviceId: `${pondId}-lights`,
-      deviceName: 'Lights',
-      deviceType: 'lights',
-      startTime: '18:00',
-      endTime: '22:00',
-      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-      isActive: true,
-    },
-  ]);
-
-  const [newSchedule, setNewSchedule] = useState({
-    deviceId: '',
-    startTime: '08:00',
-    endTime: '18:00',
-    daysOfWeek: [1, 2, 3, 4, 5] as number[],
-  });
+  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
+  const [selectedDevice, setSelectedDevice] = useState('');
 
   const pond = ponds.find(p => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
+  const stablePondId = pondId || pond?.id || 'pond1';
 
-  if (pondsLoading || devicesLoading) {
+  const { 
+    schedules, 
+    isLoading: schedulesLoading, 
+    isSaving,
+    addSchedule, 
+    updateSchedule, 
+    deleteSchedule, 
+    toggleSchedule 
+  } = useScheduleManager(stablePondId);
+
+  const [newSchedule, setNewSchedule] = useState({
+    deviceType: '',
+    startTime: '08:00',
+    endTime: '18:00',
+    repeat: 'daily' as 'once' | 'daily' | 'custom',
+    daysOfWeek: WEEKDAYS as number[],
+  });
+
+  if (pondsLoading || schedulesLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -113,18 +117,6 @@ export default function DeviceSchedules() {
     );
   }
 
-  const toggleSchedule = (scheduleId: string) => {
-    setSchedules(prev =>
-      prev.map(s =>
-        s.id === scheduleId ? { ...s, isActive: !s.isActive } : s
-      )
-    );
-  };
-
-  const deleteSchedule = (scheduleId: string) => {
-    setSchedules(prev => prev.filter(s => s.id !== scheduleId));
-  };
-
   const toggleDay = (day: number) => {
     setNewSchedule(prev => ({
       ...prev,
@@ -134,39 +126,52 @@ export default function DeviceSchedules() {
     }));
   };
 
-  const addSchedule = () => {
-    if (!newSchedule.deviceId) return;
-    
-    const device = devices.find(d => d.id === newSchedule.deviceId);
-    if (!device) return;
+  const handleAddSchedule = async () => {
+    if (!newSchedule.deviceType) {
+      toast.error('Please select a device');
+      return;
+    }
 
-    const schedule: Schedule = {
-      id: Date.now().toString(),
-      deviceId: newSchedule.deviceId,
-      deviceName: device.name,
-      deviceType: device.type,
+    const device = deviceConfig.find(d => d.type === newSchedule.deviceType);
+    
+    const success = await addSchedule({
+      deviceType: newSchedule.deviceType,
+      deviceId: newSchedule.deviceType,
+      deviceName: device?.name || newSchedule.deviceType,
       startTime: newSchedule.startTime,
       endTime: newSchedule.endTime,
-      daysOfWeek: newSchedule.daysOfWeek,
-      isActive: true,
-    };
-
-    setSchedules(prev => [...prev, schedule]);
-    setIsDialogOpen(false);
-    setNewSchedule({
-      deviceId: '',
-      startTime: '08:00',
-      endTime: '18:00',
-      daysOfWeek: [1, 2, 3, 4, 5],
+      repeat: newSchedule.repeat,
+      daysOfWeek: newSchedule.repeat === 'daily' ? ALL_DAYS : newSchedule.daysOfWeek,
+      enabled: true,
     });
+
+    if (success) {
+      setIsDialogOpen(false);
+      setNewSchedule({
+        deviceType: '',
+        startTime: '08:00',
+        endTime: '18:00',
+        repeat: 'daily',
+        daysOfWeek: WEEKDAYS,
+      });
+    }
   };
 
-  const formatDays = (days: number[]) => {
-    if (days.length === 7) return 'Every day';
-    if (days.length === 5 && !days.includes(0) && !days.includes(6)) return 'Weekdays';
-    if (days.length === 2 && days.includes(0) && days.includes(6)) return 'Weekends';
-    return days.map(d => daysOfWeek[d]).join(', ');
+  const handleToggle = async (scheduleId: string, enabled: boolean) => {
+    await toggleSchedule(scheduleId, enabled);
   };
+
+  const handleDelete = async (scheduleId: string) => {
+    await deleteSchedule(scheduleId);
+  };
+
+  // Group schedules by device
+  const schedulesByDevice = deviceConfig.map(device => ({
+    ...device,
+    schedules: schedules.filter(s => s.deviceType === device.type),
+  }));
+
+  const activeSchedulesCount = schedules.filter(s => s.enabled).length;
 
   return (
     <div className="min-h-screen bg-background pb-8">
@@ -178,7 +183,7 @@ export default function DeviceSchedules() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="flex items-center justify-between mb-6"
+          className="flex items-center justify-between mb-4"
         >
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-lg">
@@ -187,14 +192,14 @@ export default function DeviceSchedules() {
             <div>
               <h2 className="text-lg font-bold text-foreground">{pond.name}</h2>
               <p className="text-xs text-muted-foreground">
-                {schedules.length} schedules configured
+                {activeSchedulesCount} active schedules
               </p>
             </div>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="rounded-xl">
+              <Button size="sm" className="rounded-xl" disabled={isSaving}>
                 <Plus className="h-4 w-4 mr-1" />
                 Add
               </Button>
@@ -207,16 +212,19 @@ export default function DeviceSchedules() {
                 <div className="space-y-2">
                   <Label>Device</Label>
                   <Select
-                    value={newSchedule.deviceId}
-                    onValueChange={(value) => setNewSchedule(prev => ({ ...prev, deviceId: value }))}
+                    value={newSchedule.deviceType}
+                    onValueChange={(value) => setNewSchedule(prev => ({ ...prev, deviceType: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select device" />
                     </SelectTrigger>
                     <SelectContent>
-                      {devices.map(device => (
-                        <SelectItem key={device.id} value={device.id}>
-                          {device.name}
+                      {deviceConfig.map(device => (
+                        <SelectItem key={device.type} value={device.type}>
+                          <div className="flex items-center gap-2">
+                            <device.icon className="h-4 w-4" />
+                            {device.name}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -243,26 +251,56 @@ export default function DeviceSchedules() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Days</Label>
-                  <div className="flex gap-1">
-                    {daysOfWeek.map((day, index) => (
-                      <button
-                        key={day}
-                        onClick={() => toggleDay(index)}
-                        className={cn(
-                          'w-9 h-9 rounded-lg text-xs font-medium transition-colors',
-                          newSchedule.daysOfWeek.includes(index)
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        )}
-                      >
-                        {day}
-                      </button>
-                    ))}
-                  </div>
+                  <Label>Repeat</Label>
+                  <Select
+                    value={newSchedule.repeat}
+                    onValueChange={(value: 'once' | 'daily' | 'custom') => setNewSchedule(prev => ({ ...prev, repeat: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {repeatOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <Button onClick={addSchedule} className="w-full" disabled={!newSchedule.deviceId}>
+                {newSchedule.repeat === 'custom' && (
+                  <div className="space-y-2">
+                    <Label>Days</Label>
+                    <div className="flex gap-1">
+                      {DAYS_OF_WEEK.map((day, index) => (
+                        <button
+                          key={day}
+                          onClick={() => toggleDay(index)}
+                          className={cn(
+                            'w-9 h-9 rounded-lg text-xs font-medium transition-colors',
+                            newSchedule.daysOfWeek.includes(index)
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                          )}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Button 
+                  onClick={handleAddSchedule} 
+                  className="w-full" 
+                  disabled={!newSchedule.deviceType || isSaving}
+                >
+                  {isSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
                   Create Schedule
                 </Button>
               </div>
@@ -270,80 +308,163 @@ export default function DeviceSchedules() {
           </Dialog>
         </motion.div>
 
-        {/* Schedule List */}
-        <div className="space-y-3">
-          {schedules.length === 0 ? (
+        {/* Auto Mode Warning */}
+        {settings.auto_mode_enabled && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4"
+          >
+            <Card className="border-status-warning/30 bg-status-warning/10">
+              <CardContent className="p-3 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-status-warning flex-shrink-0" />
+                <p className="text-xs text-status-warning">
+                  Schedules are paused during Auto Mode. Device control is automatic based on sensor readings.
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Info Box */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-4"
+        >
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-3 flex items-start gap-2">
+              <Info className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-muted-foreground">
+                <p className="font-medium text-foreground mb-1">Schedule Execution</p>
+                <ul className="space-y-0.5">
+                  <li>• Schedules run on ESP32 time (NTP synced)</li>
+                  <li>• Manual commands override active schedules</li>
+                  <li>• Auto Mode overrides all schedules</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Schedule List by Device */}
+        <div className="space-y-4">
+          {schedulesByDevice.map((device, deviceIndex) => (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-12"
+              key={device.type}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: deviceIndex * 0.1 }}
             >
-              <Clock className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-muted-foreground">No schedules configured</p>
-              <p className="text-xs text-muted-foreground/70">Add a schedule to automate device operation</p>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <device.icon className="h-4 w-4 text-primary" />
+                    </div>
+                    {device.name}
+                    <Badge variant="secondary" className="ml-auto">
+                      {device.schedules.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {device.schedules.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">
+                      No schedules for this device
+                    </p>
+                  ) : (
+                    device.schedules.map((schedule) => (
+                      <motion.div
+                        key={schedule.id}
+                        layout
+                        className={cn(
+                          'p-3 rounded-lg border transition-all',
+                          schedule.enabled ? 'bg-card' : 'bg-muted/30 opacity-60'
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">
+                              {formatTime12h(schedule.startTime)} – {formatTime12h(schedule.endTime)}
+                            </span>
+                            {schedule.status && (
+                              <ScheduleStatusBadge status={schedule.status} />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Switch
+                              checked={schedule.enabled}
+                              onCheckedChange={(checked) => handleToggle(schedule.id, checked)}
+                              disabled={isSaving || settings.auto_mode_enabled}
+                            />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  disabled={isSaving}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Schedule?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently remove the schedule for {device.name} ({formatTime12h(schedule.startTime)} – {formatTime12h(schedule.endTime)}).
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(schedule.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {formatDays(schedule.daysOfWeek)}
+                          </p>
+                          <Badge variant="outline" className="text-[10px]">
+                            {schedule.repeat}
+                          </Badge>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
             </motion.div>
-          ) : (
-            schedules.map((schedule, index) => {
-              const Icon = deviceIcons[schedule.deviceType] || Clock;
-              return (
-                <motion.div
-                  key={schedule.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.4, delay: index * 0.1 }}
-                >
-                  <Card className={cn(
-                    'transition-all duration-300',
-                    !schedule.isActive && 'opacity-60'
-                  )}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            'h-10 w-10 rounded-xl flex items-center justify-center',
-                            schedule.isActive ? 'bg-primary/10' : 'bg-muted'
-                          )}>
-                            <Icon className={cn(
-                              'h-5 w-5',
-                              schedule.isActive ? 'text-primary' : 'text-muted-foreground'
-                            )} />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{schedule.deviceName}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {schedule.startTime} – {schedule.endTime}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={schedule.isActive}
-                            onCheckedChange={() => toggleSchedule(schedule.id)}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => deleteSchedule(schedule.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-3 pt-3 border-t border-border/50">
-                        <p className="text-xs text-muted-foreground">
-                          {formatDays(schedule.daysOfWeek)}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })
-          )}
+          ))}
         </div>
+
+        {/* Empty State */}
+        {schedules.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-8"
+          >
+            <Clock className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-muted-foreground">No schedules configured</p>
+            <p className="text-xs text-muted-foreground/70 mb-4">
+              Add a schedule to automate device operation
+            </p>
+            <Button onClick={() => setIsDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add First Schedule
+            </Button>
+          </motion.div>
+        )}
       </main>
     </div>
   );
