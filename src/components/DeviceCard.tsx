@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Droplets, Wind, Lightbulb, Power, Clock, Camera, ChevronRight, Video } from "lucide-react";
+import { Droplets, Wind, Lightbulb, Power, Clock, Camera, ChevronRight, Video, Check, Send, AlertCircle } from "lucide-react";
 
 import { database } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { triggerHapticMedium } from "@/lib/haptics";
 import { useDeviceSchedule } from "@/hooks/useDeviceSchedule";
+import { useDeviceCommand, CommandStatus, getCommandStatusDisplay } from "@/hooks/useDeviceCommand";
 import { CameraViewerDialog } from "@/components/CameraViewerDialog";
 
 export type StaticDeviceType = "motor" | "aerator" | "light" | "camera";
@@ -17,9 +18,11 @@ interface DeviceCardProps {
   type: StaticDeviceType;
   title: string;
   className?: string;
+  cameraUrl?: string | null;
 }
 
 type DeviceMode = "manual" | "auto";
+type ControlSource = "MANUAL" | "AUTO";
 
 interface DeviceMeta {
   icon: typeof Droplets;
@@ -40,12 +43,12 @@ function deviceMeta(type: StaticDeviceType): DeviceMeta {
   }
 }
 
-export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) {
+export function DeviceCard({ pondId, type, title, className, cameraUrl }: DeviceCardProps) {
   const navigate = useNavigate();
   const [isOn, setIsOn] = useState(false);
   const [mode, setMode] = useState<DeviceMode>("manual");
-  const [isWriting, setIsWriting] = useState(false);
   const [cameraDialogOpen, setCameraDialogOpen] = useState(false);
+  const { status: commandStatus, sendCommand } = useDeviceCommand();
 
   const meta = useMemo(() => deviceMeta(type), [type]);
   const { icon: Icon, subtitle, hasSchedule } = meta;
@@ -82,34 +85,18 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
       handleCameraClick();
       return;
     }
-    if (mode === "auto" || isWriting) return;
+    if (mode === "auto") return;
     
     triggerHapticMedium();
     const newState = !isOn;
-    setIsOn(newState);
-    setIsWriting(true);
-    try {
-      await set(ref(database, `ponds/${pondId}/devices/${type}/state`), newState ? 1 : 0);
-    } finally {
-      setIsWriting(false);
-    }
-  };
-
-  const handleModeToggle = async () => {
-    if (type === "camera") return;
-    triggerHapticMedium();
-    const nextMode: DeviceMode = mode === "auto" ? "manual" : "auto";
-    setMode(nextMode);
-    setIsWriting(true);
-    try {
-      await set(ref(database, `ponds/${pondId}/devices/${type}/mode`), nextMode);
-    } finally {
-      setIsWriting(false);
-    }
+    setIsOn(newState); // Optimistic update
+    
+    await sendCommand(pondId, type, newState ? 1 : 0, "manual");
   };
 
   const isAuto = mode === "auto";
   const isCamera = type === "camera";
+  const controlSource: ControlSource = isAuto ? "AUTO" : "MANUAL";
 
   // Dynamic button background colors
   const getButtonBackground = () => {
@@ -122,21 +109,14 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
   // Status badge colors
   const getStatusDotColor = () => {
     if (isCamera) return "bg-primary";
-    if (isAuto) return "bg-muted-foreground";
+    if (isAuto) return "bg-blue-500";
     if (isOn) return "bg-status-safe";
     return "bg-destructive";
   };
 
   const getStatusText = () => {
-    if (isCamera) return "LIVE";
-    if (isAuto) return "AUTO";
+    if (isCamera) return "VIEW";
     return isOn ? "ON" : "OFF";
-  };
-
-  // Mode badge styles
-  const getModeBadgeStyles = () => {
-    if (isAuto) return "bg-muted-foreground/20 text-muted-foreground border-muted-foreground/30";
-    return "bg-primary/10 text-primary border-primary/30";
   };
 
   const getScheduleDisplay = () => {
@@ -144,6 +124,36 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
     if (scheduleLoading) return "Loading...";
     if (nextSchedule) return nextSchedule.display;
     return "No schedule";
+  };
+
+  // Command status indicator
+  const renderCommandStatus = () => {
+    if (commandStatus === 'idle' || isCamera) return null;
+    
+    const { text, color } = getCommandStatusDisplay(commandStatus);
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -5 }}
+        className={cn("flex items-center gap-1.5 text-xs font-medium", color)}
+      >
+        {commandStatus === 'sending' && (
+          <Send className="h-3 w-3 animate-pulse" />
+        )}
+        {commandStatus === 'sent' && (
+          <Send className="h-3 w-3" />
+        )}
+        {commandStatus === 'acknowledged' && (
+          <Check className="h-3 w-3" />
+        )}
+        {commandStatus === 'error' && (
+          <AlertCircle className="h-3 w-3" />
+        )}
+        <span>{text}</span>
+      </motion.div>
+    );
   };
 
   return (
@@ -159,7 +169,18 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
         {/* Content Layer */}
         <div className="relative">
           {/* Status Badge - Top Right */}
-          <div className="absolute top-0 right-0">
+          <div className="absolute top-0 right-0 flex flex-col items-end gap-1">
+            {/* Control Source Badge */}
+            <div className={cn(
+              "px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider",
+              isAuto 
+                ? "bg-blue-500/20 text-blue-500 border border-blue-500/30" 
+                : "bg-primary/20 text-primary border border-primary/30"
+            )}>
+              {controlSource}
+            </div>
+            
+            {/* ON/OFF Badge */}
             <AnimatePresence mode="wait">
               <motion.div
                 key={getStatusText()}
@@ -172,7 +193,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
                 <span className={cn(
                   "h-2 w-2 rounded-full",
                   getStatusDotColor(),
-                  isCamera && "animate-pulse"
+                  (isCamera || (isOn && !isAuto)) && "animate-pulse"
                 )} />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {getStatusText()}
@@ -190,7 +211,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
                 : isOn && !isAuto
                 ? "border-status-safe/30 bg-status-safe/10"
                 : isAuto
-                ? "border-muted-foreground/20 bg-muted/50"
+                ? "border-blue-500/20 bg-blue-500/10"
                 : "border-border bg-muted/30"
             )}>
               <Icon
@@ -201,7 +222,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
                     : isOn && !isAuto
                     ? "text-status-safe"
                     : isAuto
-                    ? "text-muted-foreground"
+                    ? "text-blue-500"
                     : "text-foreground"
                 )}
                 strokeWidth={2}
@@ -238,10 +259,11 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
             whileHover={{ scale: isAuto && !isCamera ? 1 : 1.01 }}
             whileTap={{ scale: isAuto && !isCamera ? 1 : 0.98 }}
             onClick={handleToggle}
-            disabled={isWriting || (isAuto && !isCamera)}
+            disabled={commandStatus === 'sending' || (isAuto && !isCamera)}
             className={cn(
               "h-16 w-full rounded-xl flex items-center justify-center gap-3 transition-all duration-300 text-white font-bold text-base shadow-md",
-              getButtonBackground()
+              getButtonBackground(),
+              commandStatus === 'sending' && "opacity-80"
             )}
             aria-label={isCamera ? "View camera feed" : isAuto ? `${title} in auto mode` : `Toggle ${title}`}
           >
@@ -274,37 +296,29 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
             </AnimatePresence>
           </motion.button>
 
-          {/* Divider & Mode Toggle - Hide for camera */}
-          {!isCamera && (
-            <>
-              <div className="h-px bg-border/50 my-4" />
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground font-medium">Control Mode</span>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleModeToggle}
-                  disabled={isWriting}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-300 border uppercase tracking-wide",
-                    getModeBadgeStyles()
-                  )}
-                >
-                  {isAuto ? "AUTO" : "MANUAL"}
-                </motion.button>
-              </div>
-            </>
-          )}
+          {/* Command Status Display */}
+          <AnimatePresence>
+            {commandStatus !== 'idle' && !isCamera && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-3 flex justify-center"
+              >
+                {renderCommandStatus()}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Writing indicator overlay */}
+        {/* Sending indicator overlay */}
         <AnimatePresence>
-          {isWriting && (
+          {commandStatus === 'sending' && !isCamera && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-background/50 rounded-2xl flex items-center justify-center z-20"
+              className="absolute inset-0 bg-background/30 rounded-2xl flex items-center justify-center z-20 pointer-events-none"
             >
               <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </motion.div>
@@ -318,6 +332,7 @@ export function DeviceCard({ pondId, type, title, className }: DeviceCardProps) 
           onOpenChange={setCameraDialogOpen}
           pondId={pondId}
           cameraName={title}
+          streamUrl={cameraUrl}
         />
       )}
     </>

@@ -15,6 +15,7 @@ interface CameraViewerDialogProps {
   onOpenChange: (open: boolean) => void;
   pondId: string;
   cameraName: string;
+  streamUrl?: string | null;
 }
 
 export function CameraViewerDialog({
@@ -22,6 +23,7 @@ export function CameraViewerDialog({
   onOpenChange,
   pondId,
   cameraName,
+  streamUrl,
 }: CameraViewerDialogProps) {
   const [isMuted, setIsMuted] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
