@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { AddPondDialog } from '@/components/AddPondDialog';
+import { DevicePairingDialog } from '@/components/DevicePairingDialog';
+import { HowItWorksInfo } from '@/components/HowItWorksInfo';
 import { usePondData } from '@/hooks/usePondData';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { motion } from 'framer-motion';
@@ -22,7 +23,8 @@ import {
   Zap,
   Camera,
   Hand,
-  Loader2
+  Loader2,
+  Plus
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -279,7 +281,7 @@ export default function Settings() {
                 <Waves className="h-5 w-5 text-primary" />
                 <h3 className="text-lg font-semibold text-foreground">Your Ponds</h3>
               </div>
-              <AddPondDialog onSuccess={() => refetch()} />
+              <DevicePairingDialog onSuccess={() => refetch()} />
             </div>
             
             <div className="space-y-3">
@@ -288,7 +290,7 @@ export default function Settings() {
                   <CardContent className="p-6 text-center">
                     <Waves className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
                     <p className="text-muted-foreground mb-4">No ponds added yet</p>
-                    <AddPondDialog onSuccess={() => refetch()} />
+                    <DevicePairingDialog onSuccess={() => refetch()} />
                   </CardContent>
                 </Card>
               ) : (
