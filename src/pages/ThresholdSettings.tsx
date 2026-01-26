@@ -4,90 +4,90 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { 
   FlaskConical,
   Droplets,
   Thermometer,
   Save,
-  RotateCcw
+  RotateCcw,
+  Loader2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-
-interface ThresholdConfig {
-  ph: {
-    safeMin: number;
-    safeMax: number;
-    warningMin: number;
-    warningMax: number;
-  };
-  do: {
-    safeMin: number;
-    warningMin: number;
-  };
-  temperature: {
-    safeMin: number;
-    safeMax: number;
-    warningMin: number;
-    warningMax: number;
-  };
-}
-
-const defaultThresholds: ThresholdConfig = {
-  ph: {
-    safeMin: 6.5,
-    safeMax: 8.5,
-    warningMin: 6.0,
-    warningMax: 9.0,
-  },
-  do: {
-    safeMin: 5.0,
-    warningMin: 3.0,
-  },
-  temperature: {
-    safeMin: 24,
-    safeMax: 32,
-    warningMin: 20,
-    warningMax: 35,
-  },
-};
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { usePondData } from '@/hooks/usePondData';
 
 export default function ThresholdSettings() {
   const navigate = useNavigate();
-  const [thresholds, setThresholds] = useState<ThresholdConfig>(() => {
-    const saved = localStorage.getItem('sensorThresholds');
-    return saved ? JSON.parse(saved) : defaultThresholds;
+  const { settings, isLoading, updateSettings, syncToFirebase } = useUserSettings();
+  const { ponds } = usePondData();
+  
+  const [localSettings, setLocalSettings] = useState({
+    temp_min: 25,
+    temp_max: 32,
+    ph_min: 6.5,
+    ph_max: 8.5,
+    do_min: 5.0,
   });
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    localStorage.setItem('sensorThresholds', JSON.stringify(thresholds));
-    toast.success('Thresholds saved successfully');
+  // Sync local state with loaded settings
+  useEffect(() => {
+    if (!isLoading) {
+      setLocalSettings({
+        temp_min: settings.temp_min,
+        temp_max: settings.temp_max,
+        ph_min: settings.ph_min,
+        ph_max: settings.ph_max,
+        do_min: settings.do_min,
+      });
+    }
+  }, [settings, isLoading]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await updateSettings(localSettings);
+      
+      // Sync to Firebase for all ponds
+      for (const pond of ponds) {
+        await syncToFirebase(pond.id);
+      }
+      
+      toast.success('Thresholds saved and synced to devices');
+    } catch (err) {
+      toast.error('Failed to save thresholds');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleReset = () => {
-    setThresholds(defaultThresholds);
-    localStorage.removeItem('sensorThresholds');
+    setLocalSettings({
+      temp_min: 25,
+      temp_max: 32,
+      ph_min: 6.5,
+      ph_max: 8.5,
+      do_min: 5.0,
+    });
     toast.info('Thresholds reset to defaults');
   };
 
-  const updateThreshold = (
-    sensor: keyof ThresholdConfig,
-    field: string,
-    value: string
-  ) => {
+  const updateField = (field: keyof typeof localSettings, value: string) => {
     const numValue = parseFloat(value);
     if (isNaN(numValue)) return;
-    
-    setThresholds(prev => ({
-      ...prev,
-      [sensor]: {
-        ...prev[sensor],
-        [field]: numValue,
-      },
-    }));
+    setLocalSettings(prev => ({ ...prev, [field]: numValue }));
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-8">
@@ -110,58 +110,30 @@ export default function ThresholdSettings() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-2 block">Safe Range</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Min</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={thresholds.ph.safeMin}
-                      onChange={(e) => updateThreshold('ph', 'safeMin', e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Max</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={thresholds.ph.safeMax}
-                      onChange={(e) => updateThreshold('ph', 'safeMax', e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Min (Safe)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={localSettings.ph_min}
+                    onChange={(e) => updateField('ph_min', e.target.value)}
+                    className="h-9"
+                  />
                 </div>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-2 block">Warning Range</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Min</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={thresholds.ph.warningMin}
-                      onChange={(e) => updateThreshold('ph', 'warningMin', e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Max</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={thresholds.ph.warningMax}
-                      onChange={(e) => updateThreshold('ph', 'warningMax', e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
+                <div>
+                  <Label className="text-xs">Max (Safe)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={localSettings.ph_max}
+                    onChange={(e) => updateField('ph_max', e.target.value)}
+                    className="h-9"
+                  />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Values outside warning range are critical
+                Values outside this range will trigger alerts
               </p>
             </CardContent>
           </Card>
@@ -183,30 +155,18 @@ export default function ThresholdSettings() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Safe Min (mg/L)</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={thresholds.do.safeMin}
-                    onChange={(e) => updateThreshold('do', 'safeMin', e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Warning Min (mg/L)</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={thresholds.do.warningMin}
-                    onChange={(e) => updateThreshold('do', 'warningMin', e.target.value)}
-                    className="h-9"
-                  />
-                </div>
+              <div>
+                <Label className="text-xs">Minimum (mg/L)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={localSettings.do_min}
+                  onChange={(e) => updateField('do_min', e.target.value)}
+                  className="h-9 max-w-[150px]"
+                />
               </div>
               <p className="text-xs text-muted-foreground">
-                Below warning min is critical
+                Below this value: Aerator turns ON automatically (if Auto Mode enabled)
               </p>
             </CardContent>
           </Card>
@@ -228,56 +188,31 @@ export default function ThresholdSettings() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-2 block">Safe Range (°C)</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Min</Label>
-                    <Input
-                      type="number"
-                      step="1"
-                      value={thresholds.temperature.safeMin}
-                      onChange={(e) => updateThreshold('temperature', 'safeMin', e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Max</Label>
-                    <Input
-                      type="number"
-                      step="1"
-                      value={thresholds.temperature.safeMax}
-                      onChange={(e) => updateThreshold('temperature', 'safeMax', e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Min (°C)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    value={localSettings.temp_min}
+                    onChange={(e) => updateField('temp_min', e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Max (°C)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    value={localSettings.temp_max}
+                    onChange={(e) => updateField('temp_max', e.target.value)}
+                    className="h-9"
+                  />
                 </div>
               </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-2 block">Warning Range (°C)</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Min</Label>
-                    <Input
-                      type="number"
-                      step="1"
-                      value={thresholds.temperature.warningMin}
-                      onChange={(e) => updateThreshold('temperature', 'warningMin', e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Max</Label>
-                    <Input
-                      type="number"
-                      step="1"
-                      value={thresholds.temperature.warningMax}
-                      onChange={(e) => updateThreshold('temperature', 'warningMax', e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                High temperature: Motor turns ON automatically (if Auto Mode enabled)
+              </p>
             </CardContent>
           </Card>
         </motion.div>
@@ -293,6 +228,7 @@ export default function ThresholdSettings() {
             variant="outline"
             onClick={handleReset}
             className="flex-1"
+            disabled={isSaving}
           >
             <RotateCcw className="h-4 w-4 mr-2" />
             Reset
@@ -300,8 +236,13 @@ export default function ThresholdSettings() {
           <Button
             onClick={handleSave}
             className="flex-1"
+            disabled={isSaving}
           >
-            <Save className="h-4 w-4 mr-2" />
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
             Save
           </Button>
         </motion.div>

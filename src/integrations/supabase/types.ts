@@ -241,6 +241,60 @@ export type Database = {
         }
         Relationships: []
       }
+      user_settings: {
+        Row: {
+          alerts_enabled: boolean
+          auto_mode_enabled: boolean
+          camera_enabled: boolean
+          camera_ip: string | null
+          camera_rtsp_url: string | null
+          created_at: string
+          do_min: number
+          id: string
+          manual_override: boolean
+          ph_max: number
+          ph_min: number
+          temp_max: number
+          temp_min: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alerts_enabled?: boolean
+          auto_mode_enabled?: boolean
+          camera_enabled?: boolean
+          camera_ip?: string | null
+          camera_rtsp_url?: string | null
+          created_at?: string
+          do_min?: number
+          id?: string
+          manual_override?: boolean
+          ph_max?: number
+          ph_min?: number
+          temp_max?: number
+          temp_min?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alerts_enabled?: boolean
+          auto_mode_enabled?: boolean
+          camera_enabled?: boolean
+          camera_ip?: string | null
+          camera_rtsp_url?: string | null
+          created_at?: string
+          do_min?: number
+          id?: string
+          manual_override?: boolean
+          ph_max?: number
+          ph_min?: number
+          temp_max?: number
+          temp_min?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
