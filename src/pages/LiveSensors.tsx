@@ -1,41 +1,46 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useSensorData, usePondData } from '@/hooks/usePondData';
+import { useFirebaseSensors } from '@/hooks/useFirebaseSensors';
+import { usePondData } from '@/hooks/usePondData';
 import { useSensorHistory } from '@/hooks/useSensorHistory';
 import { Header } from '@/components/Header';
 import { SensorCard } from '@/components/SensorCard';
+import { SensorDebugPanel } from '@/components/SensorDebugPanel';
 import { Button } from '@/components/ui/button';
 import { 
   RefreshCw, 
   Clock,
   Loader2,
   Activity,
-  Settings
+  Settings,
+  AlertCircle
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
-import { useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function LiveSensors() {
   const { pondId } = useParams<{ pondId: string }>();
   const navigate = useNavigate();
   const { ponds, isLoading: pondsLoading } = usePondData();
-  const { sensorData, isLoading: sensorLoading, lastUpdated, refreshData } = useSensorData(pondId || '');
-  const { phHistory, doHistory, tempHistory, addReading } = useSensorHistory(pondId || '');
 
   const pond = ponds.find(p => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
+  const activePondId = pondId || pond?.id || '';
 
-  // Update history when sensor data changes
-  useEffect(() => {
-    if (sensorData) {
-      addReading({
-        ph: sensorData.ph,
-        dissolvedOxygen: sensorData.dissolvedOxygen,
-        temperature: sensorData.temperature,
-      });
-    }
-  }, [sensorData?.ph, sensorData?.dissolvedOxygen, sensorData?.temperature]);
+  // Direct Firebase sensor binding with debug info
+  const { 
+    sensorData, 
+    isLoading: sensorLoading, 
+    lastUpdated, 
+    firebaseConnected,
+    isStale,
+    debugInfo,
+    error: sensorError,
+  } = useFirebaseSensors(activePondId);
 
-  if (pondsLoading || sensorLoading) {
+  // Sensor history for sparklines
+  const { phHistory, doHistory, tempHistory } = useSensorHistory(activePondId);
+
+  if (pondsLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -43,7 +48,7 @@ export default function LiveSensors() {
     );
   }
 
-  if (!pond) {
+  if (!pond && !activePondId) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center">
@@ -53,6 +58,8 @@ export default function LiveSensors() {
       </div>
     );
   }
+
+  const pondName = pond?.name || `Pond ${activePondId}`;
 
   return (
     <div className="min-h-screen bg-background pb-8">
@@ -71,10 +78,14 @@ export default function LiveSensors() {
               <Activity className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">{pond.name}</h2>
+              <h2 className="text-lg font-bold text-foreground">{pondName}</h2>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
-                Updated {formatDistanceToNow(lastUpdated, { addSuffix: true })}
+                {lastUpdated ? (
+                  <>Updated {formatDistanceToNow(lastUpdated, { addSuffix: true })}</>
+                ) : (
+                  <>Waiting for data...</>
+                )}
               </div>
             </div>
           </div>
@@ -92,7 +103,7 @@ export default function LiveSensors() {
               <Button 
                 variant="outline" 
                 size="icon" 
-                onClick={refreshData}
+                onClick={() => window.location.reload()}
                 className="rounded-xl"
               >
                 <RefreshCw className="h-4 w-4" />
@@ -101,59 +112,119 @@ export default function LiveSensors() {
           </div>
         </motion.div>
 
-        {/* Sensor Cards */}
-        {sensorData && (
-          <div className="space-y-4">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-            >
-              <SensorCard 
-                type="ph" 
-                value={sensorData.ph} 
-                history={phHistory}
-              />
-            </motion.div>
-            
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-            >
-              <SensorCard 
-                type="do" 
-                value={sensorData.dissolvedOxygen} 
-                history={doHistory}
-              />
-            </motion.div>
-            
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.3 }}
-            >
-              <SensorCard 
-                type="temperature" 
-                value={sensorData.temperature} 
-                history={tempHistory}
-              />
-            </motion.div>
-          </div>
+        {/* Error State */}
+        {sensorError && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mb-4"
+          >
+            <Card className="border-destructive/50 bg-destructive/10">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <div>
+                  <p className="text-sm font-medium text-destructive">Connection Error</p>
+                  <p className="text-xs text-muted-foreground">{sensorError}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
+
+        {/* Debug Panel - Development Only */}
+        <div className="mb-4">
+          <SensorDebugPanel
+            debugInfo={debugInfo}
+            pondId={activePondId}
+            lastUpdated={lastUpdated}
+            isStale={isStale}
+            firebaseConnected={firebaseConnected}
+          />
+        </div>
+
+        {/* Sensor Cards */}
+        <div className="space-y-4">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+          >
+            <SensorCard 
+              type="ph" 
+              value={sensorData?.ph ?? null}
+              history={phHistory}
+              isLoading={sensorLoading}
+              isStale={isStale}
+            />
+          </motion.div>
+          
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <SensorCard 
+              type="do" 
+              value={sensorData?.dissolvedOxygen ?? null}
+              history={doHistory}
+              isLoading={sensorLoading}
+              isStale={isStale}
+            />
+          </motion.div>
+          
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+          >
+            <SensorCard 
+              type="temperature" 
+              value={sensorData?.temperature ?? null}
+              history={tempHistory}
+              isLoading={sensorLoading}
+              isStale={isStale}
+            />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.4 }}
+          >
+            <SensorCard 
+              type="turbidity" 
+              value={sensorData?.turbidity ?? null}
+              isLoading={sensorLoading}
+              isStale={isStale}
+            />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+          >
+            <SensorCard 
+              type="waterLevel" 
+              value={sensorData?.waterLevel ?? null}
+              isLoading={sensorLoading}
+              isStale={isStale}
+            />
+          </motion.div>
+        </div>
         
         {/* Auto-refresh indicator */}
         <motion.div 
           className="flex items-center justify-center gap-2 mt-6 text-xs text-muted-foreground"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.5 }}
+          transition={{ duration: 0.3, delay: 0.6 }}
         >
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-safe opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-status-safe" />
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${firebaseConnected ? 'bg-status-safe' : 'bg-destructive'} opacity-75`} />
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${firebaseConnected ? 'bg-status-safe' : 'bg-destructive'}`} />
           </span>
-          Auto-refreshing every 5 seconds
+          {firebaseConnected ? 'Real-time updates active' : 'Reconnecting...'}
         </motion.div>
       </main>
     </div>

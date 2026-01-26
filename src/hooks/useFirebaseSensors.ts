@@ -1,11 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
-import { ref, onValue } from 'firebase/database';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ref, onValue, off } from 'firebase/database';
 import { database } from '@/lib/firebase';
+
+// Firebase sensor keys - MUST match exactly what ESP32 sends
 export interface FirebaseSensorData {
-  temperature: number;
-  ph: number;
-  turbidity: number;
-  dissolvedOxygen: number;
+  temperature: number | null;
+  ph: number | null;
+  dissolvedOxygen: number | null;
+  turbidity: number | null;
+  waterLevel: number | null;
+}
+
+export interface SensorDebugInfo {
+  firebasePath: string;
+  listenerStatus: 'connecting' | 'active' | 'error' | 'disconnected';
+  lastDataReceived: Date | null;
+  rawData: any;
+  errors: string[];
 }
 
 export interface UseFirebaseSensorsResult {
@@ -14,131 +25,232 @@ export interface UseFirebaseSensorsResult {
   error: string | null;
   lastUpdated: Date | null;
   firebaseConnected: boolean;
+  isStale: boolean;
+  debugInfo: SensorDebugInfo;
 }
 
-const CACHE_KEY = 'aqua_sensors_cache';
+// Sensor data is stale if older than 60 seconds
+const STALE_THRESHOLD_MS = 60000;
 
-function getCachedData(): FirebaseSensorData | null {
-  try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    return cached ? JSON.parse(cached) : null;
-  } catch {
-    return null;
+// Validate sensor reading to filter invalid values
+function isValidSensorValue(key: string, value: any): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value !== 'number') return false;
+  if (isNaN(value)) return false;
+
+  switch (key) {
+    case 'temperature':
+      // -127 is disconnected DS18B20 sensor
+      return value > -100 && value < 100;
+    case 'ph':
+      return value >= 0 && value <= 14;
+    case 'dissolvedOxygen':
+      return value >= 0 && value <= 50;
+    case 'turbidity':
+      return value >= 0 && value <= 5000;
+    case 'waterLevel':
+      return value >= 0 && value <= 1000;
+    default:
+      return true;
   }
 }
 
-function setCachedData(data: FirebaseSensorData): void {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-  } catch {
-    // localStorage might be full or unavailable
+// Parse and validate sensor data from Firebase snapshot
+function parseSensorData(data: any): FirebaseSensorData {
+  if (!data || typeof data !== 'object') {
+    return {
+      temperature: null,
+      ph: null,
+      dissolvedOxygen: null,
+      turbidity: null,
+      waterLevel: null,
+    };
   }
+
+  return {
+    temperature: isValidSensorValue('temperature', data.temperature) ? Number(data.temperature) : null,
+    ph: isValidSensorValue('ph', data.ph) ? Number(data.ph) : null,
+    dissolvedOxygen: isValidSensorValue('dissolvedOxygen', data.dissolvedOxygen) ? Number(data.dissolvedOxygen) : null,
+    turbidity: isValidSensorValue('turbidity', data.turbidity) ? Number(data.turbidity) : null,
+    waterLevel: isValidSensorValue('waterLevel', data.waterLevel) ? Number(data.waterLevel) : null,
+  };
 }
 
-export function useFirebaseSensors(pondId: string = 'pond1'): UseFirebaseSensorsResult {
-  const cacheKey = `aqua_sensors_cache_${pondId}`;
-  
-  const getCachedDataForPond = (): FirebaseSensorData | null => {
-    try {
-      const cached = localStorage.getItem(cacheKey);
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const setCachedDataForPond = (data: FirebaseSensorData): void => {
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify(data));
-    } catch {
-      // localStorage might be full or unavailable
-    }
-  };
-
-  const [sensorData, setSensorData] = useState<FirebaseSensorData | null>(() => getCachedDataForPond());
+export function useFirebaseSensors(pondId: string): UseFirebaseSensorsResult {
+  const [sensorData, setSensorData] = useState<FirebaseSensorData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [firebaseConnected, setFirebaseConnected] = useState(false);
-  const isOnlineRef = useRef(navigator.onLine);
+  const [isStale, setIsStale] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<SensorDebugInfo>({
+    firebasePath: '',
+    listenerStatus: 'connecting',
+    lastDataReceived: null,
+    rawData: null,
+    errors: [],
+  });
 
-  useEffect(() => {
-    const handleOnline = () => {
-      isOnlineRef.current = true;
-    };
-    const handleOffline = () => {
-      isOnlineRef.current = false;
-    };
+  const lastSeenRef = useRef<number | null>(null);
+  const staleCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+  // Build Firebase path - CRITICAL: must match ESP32 path exactly
+  const firebasePath = `ponds/${pondId}/sensors`;
 
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+  // Check if data is stale
+  const checkStaleness = useCallback(() => {
+    if (lastSeenRef.current) {
+      const now = Date.now();
+      const age = now - lastSeenRef.current;
+      setIsStale(age > STALE_THRESHOLD_MS);
+    }
   }, []);
 
   useEffect(() => {
     if (!database) {
-      setError('Firebase database not initialized');
+      const errorMsg = 'Firebase database not initialized';
+      setError(errorMsg);
       setFirebaseConnected(false);
       setIsLoading(false);
-      const cached = getCachedDataForPond();
-      if (cached) {
-        setSensorData(cached);
-      }
+      setDebugInfo(prev => ({
+        ...prev,
+        firebasePath,
+        listenerStatus: 'error',
+        errors: [...prev.errors.slice(-4), errorMsg],
+      }));
       return;
     }
 
-    const sensorsRef = ref(database, `ponds/${pondId}/sensors`);
+    if (!pondId) {
+      const errorMsg = 'No pond ID provided';
+      setError(errorMsg);
+      setIsLoading(false);
+      setDebugInfo(prev => ({
+        ...prev,
+        firebasePath: 'N/A',
+        listenerStatus: 'error',
+        errors: [...prev.errors.slice(-4), errorMsg],
+      }));
+      return;
+    }
 
+    console.log(`[Firebase Sensors] Subscribing to: ${firebasePath}`);
+    
+    setDebugInfo(prev => ({
+      ...prev,
+      firebasePath,
+      listenerStatus: 'connecting',
+    }));
+
+    const sensorsRef = ref(database, firebasePath);
+
+    // Real-time listener using onValue
     const handleValue = (snapshot: any) => {
       try {
-        const data = snapshot.val();
-        if (data) {
-          const sensors: FirebaseSensorData = {
-            temperature: data.temperature ?? 0,
-            ph: data.ph ?? 0,
-            turbidity: data.turbidity ?? 0,
-            dissolvedOxygen: data.dissolvedOxygen ?? 0,
-          };
-          
-          setSensorData(sensors);
-          setCachedDataForPond(sensors);
-          setLastUpdated(new Date());
+        const rawData = snapshot.val();
+        const now = new Date();
+        
+        console.log(`[Firebase Sensors] Data received at ${now.toISOString()}:`, rawData);
+
+        setDebugInfo(prev => ({
+          ...prev,
+          listenerStatus: 'active',
+          lastDataReceived: now,
+          rawData,
+          errors: [],
+        }));
+
+        if (rawData) {
+          const parsedData = parseSensorData(rawData);
+          setSensorData(parsedData);
+          setLastUpdated(now);
+          lastSeenRef.current = now.getTime();
           setFirebaseConnected(true);
           setError(null);
+          setIsStale(false);
         } else {
+          // Path exists but no data
           setSensorData(null);
           setFirebaseConnected(true);
+          setError(null);
+          console.log(`[Firebase Sensors] No data at path: ${firebasePath}`);
         }
+        
         setIsLoading(false);
       } catch (err) {
-        console.error('Error parsing sensor data:', err);
-        setError('Failed to parse sensor data');
+        const errorMsg = `Error parsing sensor data: ${err}`;
+        console.error('[Firebase Sensors]', errorMsg);
+        setError(errorMsg);
         setFirebaseConnected(false);
         setIsLoading(false);
+        setDebugInfo(prev => ({
+          ...prev,
+          listenerStatus: 'error',
+          errors: [...prev.errors.slice(-4), errorMsg],
+        }));
       }
     };
 
     const handleError = (err: Error) => {
-      console.error('Firebase sensor read error:', err);
-      setError('Failed to connect to sensor data');
+      const errorMsg = `Firebase connection error: ${err.message}`;
+      console.error('[Firebase Sensors]', errorMsg);
+      setError(errorMsg);
       setFirebaseConnected(false);
       setIsLoading(false);
-      const cached = getCachedDataForPond();
-      if (cached) {
-        setSensorData(cached);
+      setDebugInfo(prev => ({
+        ...prev,
+        listenerStatus: 'error',
+        errors: [...prev.errors.slice(-4), errorMsg],
+      }));
+    };
+
+    // Subscribe to real-time updates
+    const unsubscribe = onValue(sensorsRef, handleValue, handleError);
+
+    // Set up staleness check interval
+    staleCheckIntervalRef.current = setInterval(checkStaleness, 5000);
+
+    // Cleanup
+    return () => {
+      console.log(`[Firebase Sensors] Unsubscribing from: ${firebasePath}`);
+      unsubscribe();
+      setDebugInfo(prev => ({
+        ...prev,
+        listenerStatus: 'disconnected',
+      }));
+      if (staleCheckIntervalRef.current) {
+        clearInterval(staleCheckIntervalRef.current);
+      }
+    };
+  }, [pondId, firebasePath, checkStaleness]);
+
+  // Also listen to lastSeen for staleness detection
+  useEffect(() => {
+    if (!database || !pondId) return;
+
+    const lastSeenPath = `ponds/${pondId}/status/lastSeen`;
+    const lastSeenDbRef = ref(database, lastSeenPath);
+
+    const handleLastSeen = (snapshot: any) => {
+      const timestamp = snapshot.val();
+      if (timestamp) {
+        lastSeenRef.current = timestamp;
+        checkStaleness();
       }
     };
 
-    const unsubscribe = onValue(sensorsRef, handleValue, handleError);
+    const unsubscribe = onValue(lastSeenDbRef, handleLastSeen, () => {});
 
-    return () => {
-      unsubscribe();
-    };
-  }, [pondId]);
+    return () => unsubscribe();
+  }, [pondId, checkStaleness]);
 
-  return { sensorData, isLoading, error, lastUpdated, firebaseConnected };
+  return { 
+    sensorData, 
+    isLoading, 
+    error, 
+    lastUpdated, 
+    firebaseConnected,
+    isStale,
+    debugInfo,
+  };
 }

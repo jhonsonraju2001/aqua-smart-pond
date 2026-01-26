@@ -37,6 +37,8 @@ export function useSensorData(pondId: string = 'pond1', readOnly: boolean = fals
     error: sensorsError, 
     lastUpdated,
     firebaseConnected: sensorsConnected,
+    isStale,
+    debugInfo,
   } = useFirebaseSensors(pondId);
 
   // Use Firebase devices hook with dynamic pondId and readOnly support
@@ -50,10 +52,10 @@ export function useSensorData(pondId: string = 'pond1', readOnly: boolean = fals
   } = useFirebaseDevices(pondId, readOnly);
 
   const sensorData: SensorData | null = firebaseSensorData ? {
-    ph: firebaseSensorData.ph,
-    dissolvedOxygen: firebaseSensorData.dissolvedOxygen,
-    temperature: firebaseSensorData.temperature,
-    turbidity: firebaseSensorData.turbidity,
+    ph: firebaseSensorData.ph ?? 0,
+    dissolvedOxygen: firebaseSensorData.dissolvedOxygen ?? 0,
+    temperature: firebaseSensorData.temperature ?? 0,
+    turbidity: firebaseSensorData.turbidity ?? undefined,
     timestamp: lastUpdated || new Date(),
   } : null;
 
@@ -70,7 +72,9 @@ export function useSensorData(pondId: string = 'pond1', readOnly: boolean = fals
     toggleDevice, 
     setDeviceAuto, 
     error: sensorsError || devicesError, 
-    firebaseConnected: sensorsConnected || devicesConnected 
+    firebaseConnected: sensorsConnected || devicesConnected,
+    isStale,
+    debugInfo,
   };
 }
 
