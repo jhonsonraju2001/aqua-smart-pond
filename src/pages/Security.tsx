@@ -15,12 +15,14 @@ import {
   KeyRound,
   LogOut,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,7 +47,9 @@ export default function Security() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleChangePassword = () => {
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
       toast.error('Passwords do not match');
       return;
@@ -54,10 +58,54 @@ export default function Security() {
       toast.error('Password must be at least 8 characters');
       return;
     }
-    toast.success('Password updated successfully!');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    if (!currentPassword) {
+      toast.error('Please enter your current password');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    
+    try {
+      // Get the current user's email
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser?.email) {
+        toast.error('User session not found. Please log in again.');
+        setIsChangingPassword(false);
+        return;
+      }
+
+      // Verify current password by attempting to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: currentUser.email,
+        password: currentPassword,
+      });
+
+      if (signInError) {
+        toast.error('Current password is incorrect');
+        setIsChangingPassword(false);
+        return;
+      }
+
+      // Update the password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        toast.error('Failed to update password');
+        setIsChangingPassword(false);
+        return;
+      }
+
+      toast.success('Password updated successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -292,9 +340,16 @@ export default function Security() {
               <Button 
                 onClick={handleChangePassword}
                 className="w-full h-12 rounded-xl"
-                disabled={!currentPassword || !newPassword || !confirmPassword}
+                disabled={!currentPassword || !newPassword || !confirmPassword || isChangingPassword}
               >
-                Update Password
+                {isChangingPassword ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Password'
+                )}
               </Button>
             </CardContent>
           </Card>

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { isValidCameraIP, isValidCameraURL } from '@/lib/cameraValidation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,15 +80,33 @@ export default function Settings() {
     }
   };
 
-  const handleCameraConfigSave = async () => {
-    try {
-      await updateSettings({
-        camera_ip: settings.camera_ip,
-        camera_rtsp_url: settings.camera_rtsp_url,
-      });
-      toast.success('Camera settings saved');
-    } catch (err) {
-      toast.error('Failed to save camera settings');
+  const handleCameraIPChange = (value: string) => {
+    // Allow typing but validate on blur/save
+    updateSettings({ camera_ip: value });
+  };
+
+  const handleCameraRTSPChange = (value: string) => {
+    // Allow typing but validate on blur/save
+    updateSettings({ camera_rtsp_url: value });
+  };
+
+  const validateAndSaveCameraIP = () => {
+    if (settings.camera_ip) {
+      const validation = isValidCameraIP(settings.camera_ip);
+      if (!validation.valid) {
+        toast.error(validation.error || 'Invalid camera IP');
+        updateSettings({ camera_ip: '' });
+      }
+    }
+  };
+
+  const validateAndSaveCameraURL = () => {
+    if (settings.camera_rtsp_url) {
+      const validation = isValidCameraURL(settings.camera_rtsp_url);
+      if (!validation.valid) {
+        toast.error(validation.error || 'Invalid RTSP URL');
+        updateSettings({ camera_rtsp_url: '' });
+      }
     }
   };
 
@@ -254,16 +273,21 @@ export default function Settings() {
                         <Input
                           placeholder="192.168.1.100"
                           value={settings.camera_ip || ''}
-                          onChange={(e) => updateSettings({ camera_ip: e.target.value })}
+                          onChange={(e) => handleCameraIPChange(e.target.value)}
+                          onBlur={validateAndSaveCameraIP}
                           className="h-9"
                         />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Enter your local camera's IP (e.g., 192.168.1.x)
+                        </p>
                       </div>
                       <div>
                         <Label className="text-xs">RTSP URL (Optional)</Label>
                         <Input
                           placeholder="rtsp://192.168.1.100:554/stream"
                           value={settings.camera_rtsp_url || ''}
-                          onChange={(e) => updateSettings({ camera_rtsp_url: e.target.value })}
+                          onChange={(e) => handleCameraRTSPChange(e.target.value)}
+                          onBlur={validateAndSaveCameraURL}
                           className="h-9"
                         />
                       </div>
