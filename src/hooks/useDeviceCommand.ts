@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ref, set, onValue, off } from 'firebase/database';
-import { database } from '@/lib/firebase';
+import { database, ensureAuth } from '@/lib/firebase';
 
 export type CommandStatus = 'idle' | 'sending' | 'sent' | 'acknowledged' | 'error';
 
@@ -26,6 +26,14 @@ export function useDeviceCommand(): UseDeviceCommandReturn {
     setStatus('sending');
 
     try {
+      // Ensure Firebase auth is ready before sending commands
+      const user = await ensureAuth();
+      if (!user) {
+        console.error('Firebase auth not available');
+        setStatus('error');
+        return false;
+      }
+
       // Write command to Firebase
       const deviceRef = ref(database, `ponds/${pondId}/devices/${deviceType}`);
       await set(deviceRef, { state, mode, commandTime: Date.now() });
