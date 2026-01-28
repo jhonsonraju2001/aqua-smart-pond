@@ -26,13 +26,11 @@ export function useDeviceCommand(): UseDeviceCommandReturn {
     setStatus('sending');
 
     try {
-      // Ensure Firebase auth is ready before sending commands
-      const user = await ensureAuth();
-      if (!user) {
-        console.error('Firebase auth not available');
-        setStatus('error');
-        return false;
-      }
+      // Try to ensure auth, but don't block if it fails
+      // Firebase rules will reject unauthorized writes anyway
+      await ensureAuth().catch(() => {
+        console.log('Auth not available, attempting write anyway');
+      });
 
       // IMPORTANT: Match the exact paths the rest of the app (and security rules) expect.
       // Do NOT overwrite `ponds/{pondId}/devices/{deviceType}` with an object.
