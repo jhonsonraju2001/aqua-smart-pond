@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useFirebaseSensors } from '@/hooks/useFirebaseSensors';
+import { useFirebaseSensors, hasAllValidSensors } from '@/hooks/useFirebaseSensors';
 import { usePondData } from '@/hooks/usePondData';
 import { useSensorHistory } from '@/hooks/useSensorHistory';
 import { Header } from '@/components/Header';
@@ -12,7 +12,8 @@ import {
   Loader2,
   Activity,
   Settings,
-  AlertCircle
+  AlertCircle,
+  WifiOff
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
@@ -39,6 +40,14 @@ export default function LiveSensors() {
 
   // Sensor history for sparklines
   const { phHistory, doHistory, tempHistory } = useSensorHistory(activePondId);
+
+  // STRICT: Check if all 3 required sensors have valid data
+  const sensorsValid = hasAllValidSensors(sensorData);
+  
+  // Debug log for troubleshooting
+  if (import.meta.env.DEV) {
+    console.log("Sensor data from Firebase:", sensorData, "| Valid:", sensorsValid);
+  }
 
   if (pondsLoading) {
     return (
@@ -142,76 +151,70 @@ export default function LiveSensors() {
           />
         </div>
 
-        {/* Sensor Cards */}
-        <div className="space-y-4">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-          >
-            <SensorCard 
-              type="ph" 
-              value={sensorData?.ph ?? null}
-              history={phHistory}
-              isLoading={sensorLoading}
-              isStale={isStale}
-            />
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-          >
-            <SensorCard 
-              type="do" 
-              value={sensorData?.dissolvedOxygen ?? null}
-              history={doHistory}
-              isLoading={sensorLoading}
-              isStale={isStale}
-            />
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.3 }}
-          >
-            <SensorCard 
-              type="temperature" 
-              value={sensorData?.temperature ?? null}
-              history={tempHistory}
-              isLoading={sensorLoading}
-              isStale={isStale}
-            />
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.4 }}
-          >
-            <SensorCard 
-              type="turbidity" 
-              value={sensorData?.turbidity ?? null}
-              isLoading={sensorLoading}
-              isStale={isStale}
-            />
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.5 }}
-          >
-            <SensorCard 
-              type="waterLevel" 
-              value={sensorData?.waterLevel ?? null}
-              isLoading={sensorLoading}
-              isStale={isStale}
-            />
-          </motion.div>
-        </div>
+        {/* STRICT: Only show sensor cards if ALL 3 sensors have valid data */}
+        {sensorLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : sensorsValid ? (
+          <div className="space-y-4">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+            >
+              <SensorCard 
+                type="temperature" 
+                value={sensorData!.temperature}
+                history={tempHistory}
+                isLoading={false}
+                isStale={isStale}
+              />
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              <SensorCard 
+                type="ph" 
+                value={sensorData!.ph}
+                history={phHistory}
+                isLoading={false}
+                isStale={isStale}
+              />
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+            >
+              <SensorCard 
+                type="do" 
+                value={sensorData!.dissolvedOxygen}
+                history={doHistory}
+                isLoading={false}
+                isStale={isStale}
+              />
+            </motion.div>
+          </div>
+        ) : (
+          <Card className="border-muted bg-muted/30">
+            <CardContent className="p-8 text-center">
+              <WifiOff className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Sensors Not Available
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Waiting for valid sensor data from ESP32 device.
+                <br />
+                All 3 sensors (Temperature, pH, DO) must report valid readings.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         
         {/* Auto-refresh indicator */}
         <motion.div 
