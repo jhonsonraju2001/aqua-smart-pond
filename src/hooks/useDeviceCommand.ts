@@ -34,9 +34,13 @@ export function useDeviceCommand(): UseDeviceCommandReturn {
         return false;
       }
 
-      // Write command to Firebase
-      const deviceRef = ref(database, `ponds/${pondId}/devices/${deviceType}`);
-      await set(deviceRef, { state, mode, commandTime: Date.now() });
+      // IMPORTANT: Match the exact paths the rest of the app (and security rules) expect.
+      // Do NOT overwrite `ponds/{pondId}/devices/{deviceType}` with an object.
+      const modeRef = ref(database, `ponds/${pondId}/devices/${deviceType}/mode`);
+      const stateRef = ref(database, `ponds/${pondId}/devices/${deviceType}/state`);
+
+      await set(modeRef, mode);
+      await set(stateRef, state);
       
       setStatus('sent');
 
