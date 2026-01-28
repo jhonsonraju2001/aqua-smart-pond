@@ -1,8 +1,8 @@
+// STRICT: Only 3 sensors allowed - temperature, ph, dissolvedOxygen
 export interface SensorData {
   ph: number;
   dissolvedOxygen: number;
   temperature: number;
-  turbidity?: number;
   timestamp: Date;
 }
 

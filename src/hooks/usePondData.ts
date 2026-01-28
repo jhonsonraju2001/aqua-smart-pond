@@ -51,11 +51,11 @@ export function useSensorData(pondId: string = 'pond1', readOnly: boolean = fals
     setDeviceAuto,
   } = useFirebaseDevices(pondId, readOnly);
 
+  // STRICT: Only map the 3 allowed sensors
   const sensorData: SensorData | null = firebaseSensorData ? {
     ph: firebaseSensorData.ph ?? 0,
     dissolvedOxygen: firebaseSensorData.dissolvedOxygen ?? 0,
     temperature: firebaseSensorData.temperature ?? 0,
-    turbidity: firebaseSensorData.turbidity ?? undefined,
     timestamp: lastUpdated || new Date(),
   } : null;
 

@@ -3,12 +3,21 @@ import { ref, onValue, off } from 'firebase/database';
 import { database } from '@/lib/firebase';
 
 // Firebase sensor keys - MUST match exactly what ESP32 sends
+// STRICT: Only these 3 sensors are allowed
 export interface FirebaseSensorData {
   temperature: number | null;
   ph: number | null;
   dissolvedOxygen: number | null;
-  turbidity: number | null;
-  waterLevel: number | null;
+}
+
+// Check if all required sensors have valid data
+export function hasAllValidSensors(data: FirebaseSensorData | null): boolean {
+  if (!data) return false;
+  return (
+    typeof data.temperature === 'number' &&
+    typeof data.ph === 'number' &&
+    typeof data.dissolvedOxygen === 'number'
+  );
 }
 
 export interface SensorDebugInfo {
@@ -32,47 +41,41 @@ export interface UseFirebaseSensorsResult {
 // Sensor data is stale if older than 60 seconds
 const STALE_THRESHOLD_MS = 60000;
 
-// Validate sensor reading to filter invalid values
+// STRICT: Validate sensor reading with exact ranges
 function isValidSensorValue(key: string, value: any): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value !== 'number') return false;
   if (isNaN(value)) return false;
 
+  // STRICT valid ranges - no other sensors allowed
   switch (key) {
     case 'temperature':
-      // -127 is disconnected DS18B20 sensor
-      return value > -100 && value < 100;
+      return value >= -10 && value <= 80;
     case 'ph':
       return value >= 0 && value <= 14;
     case 'dissolvedOxygen':
-      return value >= 0 && value <= 50;
-    case 'turbidity':
-      return value >= 0 && value <= 5000;
-    case 'waterLevel':
-      return value >= 0 && value <= 1000;
+      return value >= 0 && value <= 20;
     default:
-      return true;
+      // Unknown sensor - not allowed
+      return false;
   }
 }
 
-// Parse and validate sensor data from Firebase snapshot
+// STRICT: Parse and validate ONLY the 3 allowed sensors
 function parseSensorData(data: any): FirebaseSensorData {
   if (!data || typeof data !== 'object') {
     return {
       temperature: null,
       ph: null,
       dissolvedOxygen: null,
-      turbidity: null,
-      waterLevel: null,
     };
   }
 
+  // STRICT: Only parse temperature, ph, dissolvedOxygen
   return {
     temperature: isValidSensorValue('temperature', data.temperature) ? Number(data.temperature) : null,
     ph: isValidSensorValue('ph', data.ph) ? Number(data.ph) : null,
     dissolvedOxygen: isValidSensorValue('dissolvedOxygen', data.dissolvedOxygen) ? Number(data.dissolvedOxygen) : null,
-    turbidity: isValidSensorValue('turbidity', data.turbidity) ? Number(data.turbidity) : null,
-    waterLevel: isValidSensorValue('waterLevel', data.waterLevel) ? Number(data.waterLevel) : null,
   };
 }
 

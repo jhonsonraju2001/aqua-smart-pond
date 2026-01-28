@@ -229,12 +229,6 @@ export default function AdminPondDetails() {
                   type="temperature"
                   value={+sensorData.temperature.toFixed(1)}
                 />
-                {sensorData.turbidity !== undefined && (
-                  <SensorCard
-                    type="turbidity"
-                    value={+sensorData.turbidity.toFixed(1)}
-                  />
-                )}
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
