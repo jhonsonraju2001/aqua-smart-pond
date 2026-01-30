@@ -3,19 +3,18 @@ import { ref, onValue, off } from 'firebase/database';
 import { database } from '@/lib/firebase';
 
 // Firebase sensor keys - MUST match exactly what ESP32 sends
-// STRICT: Only these 3 sensors are allowed
+// STRICT: Only pH and dissolvedOxygen from ESP32
+// Temperature comes from Weather API, NOT Firebase
 export interface FirebaseSensorData {
-  temperature: number | null;
   ph: number | null;
   dissolvedOxygen: number | null;
 }
 
-// Check if all required sensors have valid data
-export function hasAllValidSensors(data: FirebaseSensorData | null): boolean {
+// Check if at least one sensor has valid data
+export function hasAnySensorData(data: FirebaseSensorData | null): boolean {
   if (!data) return false;
   return (
-    typeof data.temperature === 'number' &&
-    typeof data.ph === 'number' &&
+    typeof data.ph === 'number' ||
     typeof data.dissolvedOxygen === 'number'
   );
 }
@@ -42,38 +41,36 @@ export interface UseFirebaseSensorsResult {
 const STALE_THRESHOLD_MS = 60000;
 
 // STRICT: Validate sensor reading with exact ranges
+// Temperature is NO LONGER from Firebase - it comes from Weather API
 function isValidSensorValue(key: string, value: any): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value !== 'number') return false;
   if (isNaN(value)) return false;
 
-  // STRICT valid ranges - no other sensors allowed
+  // STRICT valid ranges - only pH and DO from ESP32
   switch (key) {
-    case 'temperature':
-      return value >= -10 && value <= 80;
     case 'ph':
       return value >= 0 && value <= 14;
     case 'dissolvedOxygen':
       return value >= 0 && value <= 20;
     default:
-      // Unknown sensor - not allowed
+      // Unknown sensor - not allowed (temperature no longer from Firebase)
       return false;
   }
 }
 
-// STRICT: Parse and validate ONLY the 3 allowed sensors
+// STRICT: Parse and validate ONLY pH and DO sensors
+// Temperature comes from Weather API, NOT Firebase
 function parseSensorData(data: any): FirebaseSensorData {
   if (!data || typeof data !== 'object') {
     return {
-      temperature: null,
       ph: null,
       dissolvedOxygen: null,
     };
   }
 
-  // STRICT: Only parse temperature, ph, dissolvedOxygen
+  // STRICT: Only parse pH and dissolvedOxygen from ESP32
   return {
-    temperature: isValidSensorValue('temperature', data.temperature) ? Number(data.temperature) : null,
     ph: isValidSensorValue('ph', data.ph) ? Number(data.ph) : null,
     dissolvedOxygen: isValidSensorValue('dissolvedOxygen', data.dissolvedOxygen) ? Number(data.dissolvedOxygen) : null,
   };

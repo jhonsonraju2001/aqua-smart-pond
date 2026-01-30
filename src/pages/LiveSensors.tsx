@@ -2,9 +2,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useFirebaseSensors } from '@/hooks/useFirebaseSensors';
 import { usePondData } from '@/hooks/usePondData';
 import { useSensorHistory } from '@/hooks/useSensorHistory';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { useWeatherTemperature } from '@/hooks/useWeatherTemperature';
 import { Header } from '@/components/Header';
 import { SensorCard } from '@/components/SensorCard';
 import { SensorDebugPanel } from '@/components/SensorDebugPanel';
+import { WeatherTemperatureCard } from '@/components/WeatherTemperatureCard';
 import { Button } from '@/components/ui/button';
 import { 
   RefreshCw, 
@@ -23,11 +26,12 @@ export default function LiveSensors() {
   const { pondId } = useParams<{ pondId: string }>();
   const navigate = useNavigate();
   const { ponds, isLoading: pondsLoading } = usePondData();
+  const { settings } = useUserSettings();
 
   const pond = ponds.find(p => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
   const activePondId = pondId || pond?.id || '';
 
-  // Direct Firebase sensor binding with debug info
+  // Direct Firebase sensor binding with debug info (pH and DO only)
   const { 
     sensorData, 
     isLoading: sensorLoading, 
@@ -38,18 +42,33 @@ export default function LiveSensors() {
     error: sensorError,
   } = useFirebaseSensors(activePondId);
 
-  // Sensor history for sparklines
-  const { phHistory, doHistory, tempHistory } = useSensorHistory(activePondId);
+  // Weather-based temperature (from OpenWeather API)
+  const {
+    weatherData,
+    isLoading: weatherLoading,
+    error: weatherError,
+    lastUpdated: weatherLastUpdated,
+    isStale: weatherIsStale,
+    isCached: weatherIsCached,
+    refetch: refetchWeather,
+  } = useWeatherTemperature(
+    settings.weather_location || pond?.location || 'Manila, Philippines',
+    settings.temp_unit,
+    settings.weather_temp_enabled
+  );
 
-  // Individual sensor validity checks
-  const tempValid = typeof sensorData?.temperature === 'number' && !isNaN(sensorData.temperature);
+  // Sensor history for sparklines
+  const { phHistory, doHistory } = useSensorHistory(activePondId);
+
+  // Individual sensor validity checks (pH and DO only from Firebase)
   const phValid = typeof sensorData?.ph === 'number' && !isNaN(sensorData.ph);
   const doValid = typeof sensorData?.dissolvedOxygen === 'number' && !isNaN(sensorData.dissolvedOxygen);
-  const anySensorValid = tempValid || phValid || doValid;
+  const anySensorValid = phValid || doValid;
   
   // Debug log for troubleshooting
   if (import.meta.env.DEV) {
-    console.log("Sensor data from Firebase:", sensorData, "| Temp:", tempValid, "| pH:", phValid, "| DO:", doValid);
+    console.log("Sensor data from Firebase (pH, DO):", sensorData, "| pH:", phValid, "| DO:", doValid);
+    console.log("Weather data:", weatherData);
   }
 
   if (pondsLoading) {
@@ -154,34 +173,42 @@ export default function LiveSensors() {
           />
         </div>
 
-        {/* Render each sensor card independently based on its own validity */}
+        {/* Weather Temperature Card - Always show if enabled */}
+        {settings.weather_temp_enabled && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0 }}
+            className="mb-4"
+          >
+            <WeatherTemperatureCard
+              temperature={weatherData?.temperature ?? null}
+              description={weatherData?.description ?? 'Loading...'}
+              icon={weatherData?.icon ?? '01d'}
+              location={weatherData?.location ?? settings.weather_location ?? 'Unknown'}
+              unit={settings.temp_unit}
+              lastUpdated={weatherLastUpdated}
+              isLoading={weatherLoading}
+              isStale={weatherIsStale}
+              isCached={weatherIsCached}
+              error={weatherError}
+              onRefresh={refetchWeather}
+            />
+          </motion.div>
+        )}
+
+        {/* ESP32 Sensors (pH and DO) */}
         {sensorLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : anySensorValid ? (
           <div className="space-y-4">
-            {tempValid && (
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.1 }}
-              >
-                <SensorCard 
-                  type="temperature" 
-                  value={sensorData!.temperature}
-                  history={tempHistory}
-                  isLoading={false}
-                  isStale={isStale}
-                />
-              </motion.div>
-            )}
-            
             {phValid && (
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.2 }}
+                transition={{ duration: 0.4, delay: 0.1 }}
               >
                 <SensorCard 
                   type="ph" 
@@ -197,7 +224,7 @@ export default function LiveSensors() {
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.3 }}
+                transition={{ duration: 0.4, delay: 0.2 }}
               >
                 <SensorCard 
                   type="do" 
@@ -214,10 +241,10 @@ export default function LiveSensors() {
             <CardContent className="p-8 text-center">
               <WifiOff className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold text-foreground mb-2">
-                Sensors Not Available
+                ESP32 Sensors Not Connected
               </h3>
               <p className="text-sm text-muted-foreground">
-                Waiting for valid sensor data from ESP32 device.
+                Waiting for pH and Dissolved Oxygen data from ESP32 device.
               </p>
             </CardContent>
           </Card>
