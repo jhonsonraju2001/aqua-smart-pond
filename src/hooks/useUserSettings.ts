@@ -21,6 +21,10 @@ export interface UserSettings {
   // Camera
   camera_ip: string | null;
   camera_rtsp_url: string | null;
+  // Weather settings
+  weather_temp_enabled: boolean;
+  weather_location: string | null;
+  temp_unit: 'celsius' | 'fahrenheit';
 }
 
 const defaultSettings: UserSettings = {
@@ -35,6 +39,9 @@ const defaultSettings: UserSettings = {
   manual_override: true,
   camera_ip: null,
   camera_rtsp_url: null,
+  weather_temp_enabled: true,
+  weather_location: null,
+  temp_unit: 'celsius',
 };
 
 interface UseUserSettingsReturn {
@@ -86,6 +93,9 @@ export function useUserSettings(): UseUserSettingsReturn {
             manual_override: data.manual_override,
             camera_ip: data.camera_ip,
             camera_rtsp_url: data.camera_rtsp_url,
+            weather_temp_enabled: (data as any).weather_temp_enabled ?? true,
+            weather_location: (data as any).weather_location ?? null,
+            temp_unit: ((data as any).temp_unit as 'celsius' | 'fahrenheit') ?? 'celsius',
           });
         } else {
           // Create default settings for new user
@@ -115,6 +125,9 @@ export function useUserSettings(): UseUserSettingsReturn {
               manual_override: newData.manual_override,
               camera_ip: newData.camera_ip,
               camera_rtsp_url: newData.camera_rtsp_url,
+              weather_temp_enabled: (newData as any).weather_temp_enabled ?? true,
+              weather_location: (newData as any).weather_location ?? null,
+              temp_unit: ((newData as any).temp_unit as 'celsius' | 'fahrenheit') ?? 'celsius',
             });
           }
         }
@@ -157,7 +170,10 @@ export function useUserSettings(): UseUserSettingsReturn {
           manual_override: newSettings.manual_override,
           camera_ip: newSettings.camera_ip,
           camera_rtsp_url: newSettings.camera_rtsp_url,
-        })
+          weather_temp_enabled: newSettings.weather_temp_enabled,
+          weather_location: newSettings.weather_location,
+          temp_unit: newSettings.temp_unit,
+        } as any)
         .eq('user_id', userId);
 
       if (updateError) throw updateError;

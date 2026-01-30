@@ -256,8 +256,11 @@ export type Database = {
           ph_min: number
           temp_max: number
           temp_min: number
+          temp_unit: string | null
           updated_at: string
           user_id: string
+          weather_location: string | null
+          weather_temp_enabled: boolean | null
         }
         Insert: {
           alerts_enabled?: boolean
@@ -273,8 +276,11 @@ export type Database = {
           ph_min?: number
           temp_max?: number
           temp_min?: number
+          temp_unit?: string | null
           updated_at?: string
           user_id: string
+          weather_location?: string | null
+          weather_temp_enabled?: boolean | null
         }
         Update: {
           alerts_enabled?: boolean
@@ -290,8 +296,11 @@ export type Database = {
           ph_min?: number
           temp_max?: number
           temp_min?: number
+          temp_unit?: string | null
           updated_at?: string
           user_id?: string
+          weather_location?: string | null
+          weather_temp_enabled?: boolean | null
         }
         Relationships: []
       }

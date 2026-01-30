@@ -24,7 +24,9 @@ import {
   Camera,
   Hand,
   Loader2,
-  Plus
+  Plus,
+  CloudSun,
+  Thermometer
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -290,6 +292,85 @@ export default function Settings() {
                           onBlur={validateAndSaveCameraURL}
                           className="h-9"
                         />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Weather Temperature Toggle */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-sky-500/10 flex items-center justify-center">
+                        <CloudSun className="h-5 w-5 text-sky-500" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-foreground">Weather-Based Temperature</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Get ambient temperature from weather service
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={settings.weather_temp_enabled}
+                      onCheckedChange={(checked) => handleToggleSetting('weather_temp_enabled', checked)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Weather Configuration (shown when weather temp is enabled) */}
+              {settings.weather_temp_enabled && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <Card className="border-sky-500/30">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Thermometer className="h-4 w-4" />
+                        Weather Configuration
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        Configure weather-based temperature source
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <Label className="text-xs">Location (City or GPS)</Label>
+                        <Input
+                          placeholder="Manila, Philippines"
+                          value={settings.weather_location || ''}
+                          onChange={(e) => updateSettings({ weather_location: e.target.value })}
+                          className="h-9"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Enter city name or coordinates (e.g., "Manila" or "14.5995,120.9842")
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Temperature Unit</Label>
+                        <div className="flex gap-2 mt-1">
+                          <Button
+                            variant={settings.temp_unit === 'celsius' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => updateSettings({ temp_unit: 'celsius' })}
+                            className="flex-1"
+                          >
+                            °C Celsius
+                          </Button>
+                          <Button
+                            variant={settings.temp_unit === 'fahrenheit' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => updateSettings({ temp_unit: 'fahrenheit' })}
+                            className="flex-1"
+                          >
+                            °F Fahrenheit
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
