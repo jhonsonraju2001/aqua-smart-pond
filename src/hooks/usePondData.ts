@@ -7,18 +7,28 @@ import { useFirebaseAlerts } from './useFirebaseAlerts';
 import { useFirebasePondStatus } from './useFirebasePondStatus';
 import { useFirebasePonds } from './useFirebasePonds';
 
+export interface PondWithOwnership extends Pond {
+  ownerUid?: string;
+  ownerEmail?: string;
+  isOwner?: boolean;
+}
+
 export function usePondData() {
   // Use Firebase pond discovery for real-time pond list
   const { ponds: firebasePonds, isLoading, error, firebaseConnected } = useFirebasePonds();
 
-  // Map Firebase ponds to app Pond type
-  const ponds: Pond[] = firebasePonds.map((fbPond) => ({
+  // Map Firebase ponds to app Pond type with ownership info
+  const ponds: PondWithOwnership[] = firebasePonds.map((fbPond) => ({
     id: fbPond.id,
     name: fbPond.name,
     ipAddress: 'Firebase', // No IP needed - Firebase is the bridge
     location: undefined,
-    status: fbPond.isOnline ? 'online' : 'offline',
+    status: (fbPond.isOnline ? 'online' : 'offline') as 'online' | 'offline' | 'warning' | 'critical',
     lastUpdated: fbPond.lastSeen || new Date(),
+    // Include ownership information
+    ownerUid: fbPond.ownerUid,
+    ownerEmail: fbPond.ownerEmail,
+    isOwner: fbPond.isOwner,
   }));
 
   const refetch = useCallback(() => {

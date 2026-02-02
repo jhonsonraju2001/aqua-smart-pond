@@ -5,11 +5,14 @@ import { usePondData } from "@/hooks/usePondData";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useCriticalAutoMode } from "@/hooks/useCriticalAutoMode";
 import { useFirebasePondStatus } from "@/hooks/useFirebasePondStatus";
+import { useAuth } from "@/contexts/AuthContext";
 import { database } from "@/lib/firebase";
 import { Header } from "@/components/Header";
 import { DeviceCard } from "@/components/DeviceCard";
 import { Button } from "@/components/ui/button";
-import { Calendar, Loader2, PowerOff, Power, Wifi, WifiOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Calendar, Loader2, PowerOff, Power, Wifi, WifiOff, ShieldCheck, Eye } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { triggerHapticHeavy } from "@/lib/haptics";
@@ -20,6 +23,7 @@ export default function DeviceControls() {
   const navigate = useNavigate();
   const { ponds, isLoading: pondsLoading } = usePondData();
   const { settings } = useUserSettings();
+  const { isAdmin } = useAuth();
   const [isAllOff, setIsAllOff] = useState(false);
   const [isAllOn, setIsAllOn] = useState(false);
 
@@ -33,6 +37,11 @@ export default function DeviceControls() {
   const { isOnline, lastSeen } = useFirebasePondStatus(stablePondId);
 
   const handleAllOff = async () => {
+    // SECURITY: Admins cannot control devices
+    if (isAdmin) {
+      toast.error("Admin users have read-only access to devices");
+      return;
+    }
     triggerHapticHeavy();
     setIsAllOff(true);
     try {
@@ -52,6 +61,11 @@ export default function DeviceControls() {
   };
 
   const handleAllOn = async () => {
+    // SECURITY: Admins cannot control devices
+    if (isAdmin) {
+      toast.error("Admin users have read-only access to devices");
+      return;
+    }
     triggerHapticHeavy();
     setIsAllOn(true);
     try {
@@ -96,6 +110,25 @@ export default function DeviceControls() {
       <Header title="Device Controls" showBack />
 
       <main className="p-4 max-w-md mx-auto">
+        {/* Admin Read-Only Banner */}
+        {isAdmin && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Alert className="mb-4 border-blue-500/30 bg-blue-500/10">
+              <Eye className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                <span>Admin View - Device controls are read-only</span>
+                <Badge variant="secondary" className="ml-auto bg-blue-500/20 text-blue-600 border-blue-500/30">
+                  <ShieldCheck className="h-3 w-3 mr-1" />
+                  Monitor Only
+                </Badge>
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+
         {/* Header with Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -140,40 +173,42 @@ export default function DeviceControls() {
             </div>
           </div>
 
-          {/* Quick Action Buttons */}
-          <div className="flex gap-3">
-            {/* All On Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAllOn}
-              disabled={isAllOn || isAllOff}
-              className="flex-1 text-status-safe border-status-safe/30 hover:bg-status-safe/10 hover:text-status-safe gap-2"
-            >
-              {isAllOn ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Power className="h-4 w-4" />
-              )}
-              All On
-            </Button>
+          {/* Quick Action Buttons - Hidden for Admins */}
+          {!isAdmin && (
+            <div className="flex gap-3">
+              {/* All On Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAllOn}
+                disabled={isAllOn || isAllOff}
+                className="flex-1 text-status-safe border-status-safe/30 hover:bg-status-safe/10 hover:text-status-safe gap-2"
+              >
+                {isAllOn ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Power className="h-4 w-4" />
+                )}
+                All On
+              </Button>
 
-            {/* All Off Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAllOff}
-              disabled={isAllOff || isAllOn}
-              className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive gap-2"
-            >
-              {isAllOff ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <PowerOff className="h-4 w-4" />
-              )}
-              All Off
-            </Button>
-          </div>
+              {/* All Off Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAllOff}
+                disabled={isAllOff || isAllOn}
+                className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive gap-2"
+              >
+                {isAllOff ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <PowerOff className="h-4 w-4" />
+                )}
+                All Off
+              </Button>
+            </div>
+          )}
         </motion.div>
 
         {/* Device Cards */}
@@ -183,7 +218,7 @@ export default function DeviceControls() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.05 }}
           >
-            <DeviceCard pondId={stablePondId} type="motor" title="Water Pump" />
+            <DeviceCard pondId={stablePondId} type="motor" title="Water Pump" readOnly={isAdmin} />
           </motion.div>
 
           <motion.div
@@ -191,7 +226,7 @@ export default function DeviceControls() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
           >
-            <DeviceCard pondId={stablePondId} type="aerator" title="Aerator" />
+            <DeviceCard pondId={stablePondId} type="aerator" title="Aerator" readOnly={isAdmin} />
           </motion.div>
 
           <motion.div
@@ -199,7 +234,7 @@ export default function DeviceControls() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.15 }}
           >
-            <DeviceCard pondId={stablePondId} type="light" title="Light" />
+            <DeviceCard pondId={stablePondId} type="light" title="Light" readOnly={isAdmin} />
           </motion.div>
 
           {/* Camera - Only shown when enabled in settings */}
@@ -226,7 +261,7 @@ export default function DeviceControls() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.25, delay: 0.25 }}
         >
-          Tap the button to toggle each device
+          {isAdmin ? "Monitoring device states (read-only)" : "Tap the button to toggle each device"}
         </motion.p>
 
         {/* Last seen indicator */}
