@@ -1,16 +1,19 @@
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
-import { Pond } from '@/types/aquaculture';
-import { Waves, MapPin, Fish, ChevronRight, Wifi, WifiOff } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Waves, MapPin, Fish, ChevronRight, Wifi, WifiOff, User, ShieldCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+import { PondWithOwnership } from '@/hooks/usePondData';
+
 interface PondCardProps {
-  pond: Pond;
+  pond: PondWithOwnership;
   onClick: () => void;
   className?: string;
+  showOwnerBadge?: boolean;
 }
 
-export function PondCard({ pond, onClick, className }: PondCardProps) {
+export function PondCard({ pond, onClick, className, showOwnerBadge = false }: PondCardProps) {
   const statusColors = {
     online: 'text-status-safe',
     offline: 'text-muted-foreground',
@@ -40,7 +43,22 @@ export function PondCard({ pond, onClick, className }: PondCardProps) {
               <Waves className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h3 className="font-semibold text-lg text-foreground">{pond.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-lg text-foreground">{pond.name}</h3>
+                {/* Ownership Badge */}
+                {pond.isOwner && (
+                  <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 bg-status-safe/10 text-status-safe border-status-safe/30">
+                    <User className="h-2.5 w-2.5" />
+                    Owner
+                  </Badge>
+                )}
+                {showOwnerBadge && !pond.isOwner && (
+                  <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 border-blue-500/30">
+                    <ShieldCheck className="h-2.5 w-2.5" />
+                    Admin
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5" />
                 {pond.location || 'No location'}
@@ -68,6 +86,14 @@ export function PondCard({ pond, onClick, className }: PondCardProps) {
             {pond.capacity?.toLocaleString() || '—'} fish
           </div>
         </div>
+
+        {/* Show owner email for admin view */}
+        {showOwnerBadge && pond.ownerEmail && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 px-2 py-1.5 bg-muted/50 rounded-lg">
+            <User className="h-3 w-3" />
+            <span>Owner: {pond.ownerEmail}</span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-3 border-t border-border">
           <div className="text-xs text-muted-foreground">

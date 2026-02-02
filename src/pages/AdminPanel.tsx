@@ -118,6 +118,21 @@ export default function AdminPanel() {
       <Header title="Admin Panel" showBack />
       
       <main className="p-4 max-w-4xl mx-auto">
+        {/* Admin View Header Banner */}
+        <div className="mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+            <Shield className="h-5 w-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-blue-700 dark:text-blue-400">Administrator Dashboard</h3>
+            <p className="text-xs text-blue-600/70 dark:text-blue-400/70">
+              You have read-only access to all ponds. Device controls are disabled for safety.
+            </p>
+          </div>
+          <Badge className="bg-blue-500 text-white">
+            Admin
+          </Badge>
+        </div>
         {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <Card variant="device">

@@ -2,9 +2,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { usePondData, useAlerts } from '@/hooks/usePondData';
 import { useFirebasePondStatus } from '@/hooks/useFirebasePondStatus';
 import { useSensorData } from '@/hooks/usePondData';
+import { useAuth } from '@/contexts/AuthContext';
 import { Header } from '@/components/Header';
 import { ActionButton } from '@/components/ActionButton';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Activity, 
   ToggleRight, 
@@ -13,7 +16,10 @@ import {
   Wifi,
   WifiOff,
   Loader2,
-  Waves
+  Waves,
+  User,
+  ShieldCheck,
+  Eye
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -23,10 +29,14 @@ export default function PondHome() {
   const navigate = useNavigate();
   const { ponds, isLoading: pondsLoading } = usePondData();
   const { alerts } = useAlerts();
+  const { isAdmin } = useAuth();
 
+  // Get the pond with ownership info
   const pond = ponds.find(p => p.id === pondId) || (ponds.length === 1 ? ponds[0] : null);
   const activePondId = pond?.id || pondId || '';
   
+  // Check if user is owner (for display purposes)
+  const isOwner = (pond as any)?.isOwner ?? true;
   // Use Firebase pond status for realtime online/offline detection
   const { isOnline: firebaseIsOnline, lastSeen, connectionError } = useFirebasePondStatus();
   
@@ -63,6 +73,22 @@ export default function PondHome() {
       />
       
       <main className="p-4 max-w-lg mx-auto">
+        {/* Admin Read-Only Notice */}
+        {isAdmin && !isOwner && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4"
+          >
+            <Alert className="border-blue-500/30 bg-blue-500/10">
+              <Eye className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700 dark:text-blue-400">
+                Admin View - You are viewing this pond as a monitor. Device controls are read-only.
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+
         {/* Pond Status Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -88,7 +114,21 @@ export default function PondHome() {
                   </motion.div>
                   
                   <div className="flex-1">
-                    <h2 className="text-xl font-bold text-white">{pond.name}</h2>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h2 className="text-xl font-bold text-white">{pond.name}</h2>
+                      {/* Ownership Badge */}
+                      {isOwner ? (
+                        <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 bg-white/20 text-white border-white/30">
+                          <User className="h-2.5 w-2.5" />
+                          Owner
+                        </Badge>
+                      ) : isAdmin ? (
+                        <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 bg-white/20 text-white border-white/30">
+                          <ShieldCheck className="h-2.5 w-2.5" />
+                          Admin
+                        </Badge>
+                      ) : null}
+                    </div>
                     <p className="text-white/70 text-sm font-mono">{pond.ipAddress}</p>
                   </div>
 

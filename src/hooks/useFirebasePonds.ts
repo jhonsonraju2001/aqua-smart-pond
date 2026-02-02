@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { database } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface FirebasePond {
   id: string;
@@ -9,6 +10,9 @@ export interface FirebasePond {
   lastSeen: Date | null;
   hasSensors: boolean;
   hasDevices: boolean;
+  ownerUid?: string;
+  ownerEmail?: string;
+  isOwner?: boolean; // true if current user owns this pond
 }
 
 const CACHE_KEY = 'firebase_ponds_cache';
@@ -39,6 +43,7 @@ function saveCache(ponds: FirebasePond[]): void {
 }
 
 export function useFirebasePonds() {
+  const { user, isAdmin } = useAuth();
   const [ponds, setPonds] = useState<FirebasePond[]>(loadCache);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +52,13 @@ export function useFirebasePonds() {
   useEffect(() => {
     if (!database) {
       setError('Firebase not initialized');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!user) {
+      // Not logged in - show no ponds
+      setPonds([]);
       setIsLoading(false);
       return;
     }
@@ -61,17 +73,9 @@ export function useFirebasePonds() {
         setError(null);
 
         if (!snapshot.exists()) {
-          // No ponds in Firebase - return default pond1 placeholder
-          const defaultPond: FirebasePond = {
-            id: 'pond1',
-            name: 'Pond 1',
-            isOnline: false,
-            lastSeen: null,
-            hasSensors: false,
-            hasDevices: false,
-          };
-          setPonds([defaultPond]);
-          saveCache([defaultPond]);
+          // No ponds in Firebase
+          setPonds([]);
+          saveCache([]);
           return;
         }
 
@@ -81,13 +85,27 @@ export function useFirebasePonds() {
 
         Object.keys(data).forEach((pondId) => {
           const pondData = data[pondId];
+          const ownerUid = pondData?.ownerUid;
+          const ownerEmail = pondData?.ownerEmail;
+          
+          // SECURITY: Filter ponds based on ownership
+          // Normal users can only see their own ponds
+          // Admins can see all ponds
+          const isOwner = ownerUid === user.id;
+          
+          if (!isAdmin && !isOwner) {
+            // Normal user - skip ponds they don't own
+            return;
+          }
+
           const lastSeenTimestamp = pondData?.lastSeen;
           const lastSeen = lastSeenTimestamp ? new Date(lastSeenTimestamp) : null;
           const isOnline = lastSeenTimestamp ? (now - lastSeenTimestamp) < ONLINE_THRESHOLD : false;
 
-          // Generate readable name from pond ID
+          // Generate readable name from pond ID or use stored name
+          const storedName = pondData?.name;
           const pondNumber = pondId.replace(/[^0-9]/g, '');
-          const name = pondNumber ? `Pond ${pondNumber}` : pondId.charAt(0).toUpperCase() + pondId.slice(1);
+          const name = storedName || (pondNumber ? `Pond ${pondNumber}` : pondId.charAt(0).toUpperCase() + pondId.slice(1));
 
           discoveredPonds.push({
             id: pondId,
@@ -96,6 +114,9 @@ export function useFirebasePonds() {
             lastSeen,
             hasSensors: !!pondData?.sensors,
             hasDevices: !!pondData?.devices,
+            ownerUid,
+            ownerEmail,
+            isOwner,
           });
         });
 
@@ -111,20 +132,15 @@ export function useFirebasePonds() {
         setFirebaseConnected(false);
         setIsLoading(false);
         
-        // Use cached data on error
+        // Use cached data on error (filtered by ownership)
         const cached = loadCache();
-        if (cached.length > 0) {
-          setPonds(cached);
+        if (cached.length > 0 && user) {
+          const filteredCache = isAdmin 
+            ? cached 
+            : cached.filter(p => p.ownerUid === user.id);
+          setPonds(filteredCache);
         } else {
-          // Fallback to default pond1
-          setPonds([{
-            id: 'pond1',
-            name: 'Pond 1',
-            isOnline: false,
-            lastSeen: null,
-            hasSensors: false,
-            hasDevices: false,
-          }]);
+          setPonds([]);
         }
       }
     );
@@ -132,7 +148,7 @@ export function useFirebasePonds() {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [user, isAdmin]);
 
   // Update online status periodically (every 10 seconds)
   useEffect(() => {

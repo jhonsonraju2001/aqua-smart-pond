@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Droplets, Wind, Lightbulb, Power, Clock, Camera, ChevronRight, Video, Check, Send, AlertCircle } from "lucide-react";
+import { Droplets, Wind, Lightbulb, Power, Clock, Camera, ChevronRight, Video, Check, Send, AlertCircle, ShieldCheck } from "lucide-react";
 
 import { database } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,8 @@ import { triggerHapticMedium } from "@/lib/haptics";
 import { useDeviceSchedule } from "@/hooks/useDeviceSchedule";
 import { useDeviceCommand, CommandStatus, getCommandStatusDisplay } from "@/hooks/useDeviceCommand";
 import { CameraViewerDialog } from "@/components/CameraViewerDialog";
+
+import { useAuth } from "@/contexts/AuthContext";
 
 export type StaticDeviceType = "motor" | "aerator" | "light" | "camera";
 
@@ -19,6 +21,7 @@ interface DeviceCardProps {
   title: string;
   className?: string;
   cameraUrl?: string | null;
+  readOnly?: boolean; // For admin view - disable controls
 }
 
 type DeviceMode = "manual" | "auto";
@@ -43,12 +46,16 @@ function deviceMeta(type: StaticDeviceType): DeviceMeta {
   }
 }
 
-export function DeviceCard({ pondId, type, title, className, cameraUrl }: DeviceCardProps) {
+export function DeviceCard({ pondId, type, title, className, cameraUrl, readOnly = false }: DeviceCardProps) {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [isOn, setIsOn] = useState(false);
   const [mode, setMode] = useState<DeviceMode>("manual");
   const [cameraDialogOpen, setCameraDialogOpen] = useState(false);
   const { status: commandStatus, sendCommand } = useDeviceCommand();
+
+  // SECURITY: Admins have read-only access to devices - they cannot control them
+  const isControlDisabled = readOnly || isAdmin;
 
   const meta = useMemo(() => deviceMeta(type), [type]);
   const { icon: Icon, subtitle, hasSchedule } = meta;
@@ -85,7 +92,8 @@ export function DeviceCard({ pondId, type, title, className, cameraUrl }: Device
       handleCameraClick();
       return;
     }
-    if (mode === "auto") return;
+    // SECURITY: Block control for admins and auto mode
+    if (isControlDisabled || mode === "auto") return;
     
     triggerHapticMedium();
     const newState = !isOn;
@@ -101,7 +109,8 @@ export function DeviceCard({ pondId, type, title, className, cameraUrl }: Device
   // Dynamic button background colors
   const getButtonBackground = () => {
     if (isCamera) return "bg-primary hover:bg-primary/90";
-    if (isAuto) return "bg-muted-foreground/60 cursor-not-allowed";
+    if (isControlDisabled) return "bg-muted-foreground/40 cursor-not-allowed";
+    if (isAuto) return "bg-blue-500/60 cursor-not-allowed";
     if (isOn) return "bg-status-safe hover:bg-status-safe/90";
     return "bg-destructive hover:bg-destructive/90";
   };
@@ -256,16 +265,16 @@ export function DeviceCard({ pondId, type, title, className, cameraUrl }: Device
 
           {/* Single Large Toggle Button with Dynamic Background */}
           <motion.button
-            whileHover={{ scale: isAuto && !isCamera ? 1 : 1.01 }}
-            whileTap={{ scale: isAuto && !isCamera ? 1 : 0.98 }}
+            whileHover={{ scale: (isControlDisabled || isAuto) && !isCamera ? 1 : 1.01 }}
+            whileTap={{ scale: (isControlDisabled || isAuto) && !isCamera ? 1 : 0.98 }}
             onClick={handleToggle}
-            disabled={commandStatus === 'sending' || (isAuto && !isCamera)}
+            disabled={commandStatus === 'sending' || ((isControlDisabled || isAuto) && !isCamera)}
             className={cn(
               "h-16 w-full rounded-xl flex items-center justify-center gap-3 transition-all duration-300 text-white font-bold text-base shadow-md",
               getButtonBackground(),
               commandStatus === 'sending' && "opacity-80"
             )}
-            aria-label={isCamera ? "View camera feed" : isAuto ? `${title} in auto mode` : `Toggle ${title}`}
+            aria-label={isCamera ? "View camera feed" : isControlDisabled ? `${title} (read-only)` : isAuto ? `${title} in auto mode` : `Toggle ${title}`}
           >
             <AnimatePresence mode="wait">
               <motion.div
@@ -280,6 +289,11 @@ export function DeviceCard({ pondId, type, title, className, cameraUrl }: Device
                   <>
                     <Video className="h-5 w-5" strokeWidth={2.5} />
                     <span className="uppercase tracking-wide">View Feed</span>
+                  </>
+                ) : isControlDisabled && !isAuto ? (
+                  <>
+                    <ShieldCheck className="h-5 w-5" strokeWidth={2.5} />
+                    <span className="uppercase tracking-wide">View Only</span>
                   </>
                 ) : isAuto ? (
                   <>
