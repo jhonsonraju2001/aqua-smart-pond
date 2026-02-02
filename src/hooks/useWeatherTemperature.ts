@@ -90,12 +90,7 @@ export function useWeatherTemperature(
     try {
       console.log('[Weather] Fetching from API for location:', location);
       
-      const { data, error: fetchError } = await supabase.functions.invoke('get-weather', {
-        body: null,
-        headers: {},
-      });
-
-      // Build query params
+      // Build query params for GET request
       const params = new URLSearchParams({
         location: location,
         unit: unit,
