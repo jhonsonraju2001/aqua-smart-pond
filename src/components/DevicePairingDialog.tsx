@@ -21,18 +21,19 @@ import {
   Tag, 
   Check, 
   Copy, 
-  QrCode,
   Cpu,
   ArrowRight,
-  Info
+  Info,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DevicePairingDialogProps {
   onSuccess?: (pondId: string) => void;
 }
 
-type Step = 'info' | 'create' | 'pairing';
+type Step = 'info' | 'create' | 'success';
 
 export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
   const [open, setOpen] = useState(false);
@@ -40,10 +41,11 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
   const [name, setName] = useState('');
   const [deviceIp, setDeviceIp] = useState('');
   const [location, setLocation] = useState('');
-  const [pairingResult, setPairingResult] = useState<{ pondId: string; code: string } | null>(null);
+  const [createdPondId, setCreatedPondId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   
   const { isPairing, createPond, generatePondId } = useDevicePairing();
+  const { user } = useAuth();
   const [previewPondId, setPreviewPondId] = useState('');
 
   useEffect(() => {
@@ -64,38 +66,31 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
 
     const result = await createPond(name, deviceIp, location);
     
-    if (result.success && result.pondId && result.pairingCode) {
-      setPairingResult({ pondId: result.pondId, code: result.pairingCode });
-      setStep('pairing');
+    if (result.success && result.pondId) {
+      setCreatedPondId(result.pondId);
+      setStep('success');
     }
   };
 
   const copyPondId = () => {
-    if (pairingResult) {
-      navigator.clipboard.writeText(pairingResult.pondId);
+    if (createdPondId) {
+      navigator.clipboard.writeText(createdPondId);
       setCopied(true);
-      toast.success('Pond ID copied!');
+      toast.success('Pond ID copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const copyPairingCode = () => {
-    if (pairingResult) {
-      navigator.clipboard.writeText(pairingResult.code);
-      toast.success('Pairing code copied!');
-    }
-  };
-
   const handleClose = () => {
-    if (pairingResult) {
-      onSuccess?.(pairingResult.pondId);
+    if (createdPondId) {
+      onSuccess?.(createdPondId);
     }
     setOpen(false);
     setStep('info');
     setName('');
     setDeviceIp('');
     setLocation('');
-    setPairingResult(null);
+    setCreatedPondId(null);
   };
 
   return (
@@ -121,7 +116,7 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
                   How Device Pairing Works
                 </DialogTitle>
                 <DialogDescription>
-                  Connect your ESP32 device to the monitoring system
+                  Connect your ESP32 device to your account
                 </DialogDescription>
               </DialogHeader>
               
@@ -134,7 +129,9 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
                       </div>
                       <div>
                         <h4 className="font-medium text-sm">Create Pond in App</h4>
-                        <p className="text-xs text-muted-foreground">Enter pond details and generate a unique Pond ID</p>
+                        <p className="text-xs text-muted-foreground">
+                          Enter pond details. You become the <strong>Owner</strong> automatically.
+                        </p>
                       </div>
                     </div>
                     
@@ -143,8 +140,10 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
                         <span className="text-sm font-bold text-primary">2</span>
                       </div>
                       <div>
-                        <h4 className="font-medium text-sm">Enter Pond ID on ESP32</h4>
-                        <p className="text-xs text-muted-foreground">During first boot, enter the Pond ID via serial or config portal</p>
+                        <h4 className="font-medium text-sm">Get Your Pond ID</h4>
+                        <p className="text-xs text-muted-foreground">
+                          A unique Pond ID is generated. Copy it for your ESP32.
+                        </p>
                       </div>
                     </div>
                     
@@ -153,25 +152,41 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
                         <span className="text-sm font-bold text-primary">3</span>
                       </div>
                       <div>
+                        <h4 className="font-medium text-sm">Enter Pond ID on ESP32</h4>
+                        <p className="text-xs text-muted-foreground">
+                          During first boot, enter <strong>only the Pond ID</strong> via config portal.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <div className="h-8 w-8 rounded-full bg-status-safe/20 flex items-center justify-center flex-shrink-0">
+                        <Check className="h-4 w-4 text-status-safe" />
+                      </div>
+                      <div>
                         <h4 className="font-medium text-sm">Device Locked to Pond</h4>
-                        <p className="text-xs text-muted-foreground">ESP32 connects only to its assigned pond path in Firebase</p>
+                        <p className="text-xs text-muted-foreground">
+                          ESP32 connects only to your pond path. Fully isolated.
+                        </p>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
-                    <Cpu className="h-3.5 w-3.5" />
-                    Multi-Device Architecture
-                  </h4>
-                  <ul className="text-xs text-muted-foreground space-y-1">
-                    <li>• Each ESP32 reads only its own pond path</li>
-                    <li>• No interference between client devices</li>
-                    <li>• Scales to 10,000+ devices</li>
-                    <li>• Works independently when offline</li>
-                  </ul>
-                </div>
+                <Card className="bg-muted/50">
+                  <CardContent className="p-3">
+                    <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
+                      <ShieldCheck className="h-3.5 w-3.5 text-status-safe" />
+                      Owner Security Model
+                    </h4>
+                    <ul className="text-xs text-muted-foreground space-y-1">
+                      <li>• Your account UID = Pond Owner</li>
+                      <li>• Only you can see & control this pond</li>
+                      <li>• ESP32 uses Pond ID only (no password needed)</li>
+                      <li>• Firebase rules enforce ownership server-side</li>
+                    </ul>
+                  </CardContent>
+                </Card>
 
                 <Button onClick={() => setStep('create')} className="w-full">
                   Continue to Setup
@@ -191,15 +206,31 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
               <DialogHeader>
                 <DialogTitle>Create New Pond</DialogTitle>
                 <DialogDescription>
-                  Enter your pond details to generate a unique Pond ID
+                  You will be assigned as the owner of this pond
                 </DialogDescription>
               </DialogHeader>
               
               <div className="space-y-4 py-4">
+                {/* Owner Info */}
+                <Card className="border-status-safe/30 bg-status-safe/5">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShieldCheck className="h-4 w-4 text-status-safe" />
+                      <span className="text-xs font-medium">Owner Account</span>
+                    </div>
+                    <p className="text-sm font-mono text-muted-foreground truncate">
+                      {user?.email || 'Not logged in'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Your UID will be linked to this pond
+                    </p>
+                  </CardContent>
+                </Card>
+
                 {/* Pond ID Preview */}
                 <Card className="border-dashed">
                   <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Auto-Generated Pond ID</p>
+                    <p className="text-xs text-muted-foreground mb-1">Auto-Generated Pond ID (for ESP32)</p>
                     <code className="text-sm font-mono font-bold text-primary">{previewPondId}</code>
                   </CardContent>
                 </Card>
@@ -274,9 +305,9 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
             </motion.div>
           )}
 
-          {step === 'pairing' && pairingResult && (
+          {step === 'success' && createdPondId && (
             <motion.div
-              key="pairing"
+              key="success"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -287,61 +318,64 @@ export function DevicePairingDialog({ onSuccess }: DevicePairingDialogProps) {
                   Pond Created Successfully!
                 </DialogTitle>
                 <DialogDescription>
-                  Use these credentials to connect your ESP32
+                  You are now the owner of this pond
                 </DialogDescription>
               </DialogHeader>
               
               <div className="space-y-4 py-4">
-                {/* Pond ID */}
+                {/* Owner Confirmation */}
+                <Card className="border-status-safe/30 bg-status-safe/5">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck className="h-4 w-4 text-status-safe" />
+                      <span className="text-xs font-medium text-status-safe">Owner Assigned</span>
+                    </div>
+                    <p className="text-sm font-mono text-muted-foreground truncate">
+                      {user?.email}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Pond ID - Main Focus */}
                 <div className="space-y-2">
-                  <Label className="text-xs">Pond ID (Enter on ESP32)</Label>
+                  <Label className="text-sm font-medium">
+                    Pond ID <span className="text-muted-foreground">(Enter this on ESP32)</span>
+                  </Label>
                   <div className="flex gap-2">
                     <Input
                       readOnly
-                      value={pairingResult.pondId}
-                      className="font-mono font-bold text-primary"
+                      value={createdPondId}
+                      className="font-mono font-bold text-lg text-primary tracking-wide"
                     />
                     <Button
                       variant="outline"
                       size="icon"
                       onClick={copyPondId}
+                      className="flex-shrink-0"
                     >
                       {copied ? <Check className="h-4 w-4 text-status-safe" /> : <Copy className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
 
-                {/* Pairing Code */}
-                <div className="space-y-2">
-                  <Label className="text-xs">Pairing Code (Optional Verification)</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      value={pairingResult.code}
-                      className="font-mono font-bold text-lg tracking-widest text-center"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={copyPairingCode}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Expires in 24 hours
-                  </p>
-                </div>
-
                 <Card className="bg-muted/50">
                   <CardContent className="p-3">
-                    <h4 className="text-xs font-medium mb-2">ESP32 Configuration</h4>
-                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                    <h4 className="text-xs font-medium mb-2 flex items-center gap-1">
+                      <Cpu className="h-3.5 w-3.5" />
+                      ESP32 Setup Instructions
+                    </h4>
+                    <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
                       <li>Power on your ESP32 device</li>
-                      <li>Connect to its WiFi config portal</li>
-                      <li>Enter the <strong>Pond ID</strong> in the setup</li>
-                      <li>Device will connect automatically</li>
+                      <li>Connect to its WiFi config portal (AP mode)</li>
+                      <li>Enter the <strong>Pond ID</strong> shown above</li>
+                      <li>Save and reboot - device connects automatically</li>
                     </ol>
+                    <div className="mt-3 p-2 bg-background rounded border border-dashed">
+                      <p className="text-xs text-muted-foreground">
+                        <strong>No password needed</strong> - The Pond ID locks the ESP32 to your pond path in Firebase. 
+                        Only your account can access this pond's data.
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
 
