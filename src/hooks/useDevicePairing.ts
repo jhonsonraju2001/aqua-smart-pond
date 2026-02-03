@@ -71,11 +71,12 @@ export function useDevicePairing(): UseDevicePairingReturn {
         throw new Error(supabaseError.message);
       }
 
-      // 2. Initialize in Firebase with proper structure
+      // 2. Initialize in Firebase with proper structure including ownerUid
       if (database) {
         await set(ref(database, `ponds/${pondId}`), {
           name,
-          ownerId: user.id,
+          ownerUid: user.id, // CRITICAL: Single source of truth for ownership
+          ownerEmail: user.email, // Display only
           deviceIp,
           location: location || null,
           createdAt: Date.now(),
@@ -84,10 +85,8 @@ export function useDevicePairing(): UseDevicePairingReturn {
             lastSeen: null,
           },
           sensors: {
-            temperature: 0,
             ph: 0,
             dissolvedOxygen: 0,
-            turbidity: 0,
           },
           devices: {
             motor: { state: 0, mode: 'manual' },

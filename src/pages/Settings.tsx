@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { DevicePairingDialog } from '@/components/DevicePairingDialog';
+import { OwnershipTransferDialog } from '@/components/OwnershipTransferDialog';
 import { HowItWorksInfo } from '@/components/HowItWorksInfo';
 import { usePondData } from '@/hooks/usePondData';
 import { useUserSettings } from '@/hooks/useUserSettings';
@@ -19,6 +20,7 @@ import {
   ChevronRight,
   Trash2,
   MapPin,
+  UserCog,
   Wifi,
   Zap,
   Camera,
@@ -431,34 +433,44 @@ export default function Settings() {
                             </div>
                           </div>
                           
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete {pond.name}?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will permanently delete the pond and all associated data including sensor readings, devices, schedules, and alerts. This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeletePond(pond.id, pond.name)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          <div className="flex items-center gap-1">
+                            {/* Ownership Transfer Button */}
+                            <OwnershipTransferDialog
+                              pondId={pond.id}
+                              pondName={pond.name}
+                              onTransferComplete={() => refetch()}
+                            />
+                            
+                            {/* Delete Button */}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                 >
-                                  Delete Pond
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete {pond.name}?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently delete the pond and all associated data including sensor readings, devices, schedules, and alerts. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeletePond(pond.id, pond.name)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete Pond
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
