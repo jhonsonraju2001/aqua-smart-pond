@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { DevicePairingDialog } from '@/components/DevicePairingDialog';
 import { OwnershipTransferDialog } from '@/components/OwnershipTransferDialog';
+import { RegeneratePondIdDialog } from '@/components/RegeneratePondIdDialog';
 import { HowItWorksInfo } from '@/components/HowItWorksInfo';
 import { usePondData } from '@/hooks/usePondData';
 import { useUserSettings } from '@/hooks/useUserSettings';
@@ -434,6 +435,13 @@ export default function Settings() {
                           </div>
                           
                           <div className="flex items-center gap-1">
+                            {/* Regenerate Pond ID Button */}
+                            <RegeneratePondIdDialog
+                              pondId={pond.id}
+                              pondName={pond.name}
+                              onRegenerate={() => refetch()}
+                            />
+                            
                             {/* Ownership Transfer Button */}
                             <OwnershipTransferDialog
                               pondId={pond.id}
