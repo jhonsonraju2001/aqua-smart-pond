@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Waves, Mail, Lock, User, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Waves, Mail, Lock, User, Loader2, Eye, EyeOff, ShieldCheck, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Login() {
@@ -206,22 +206,13 @@ export default function Login() {
                     </Button>
                   </form>
 
-                  {/* Demo Accounts */}
+                  {/* User Demo Access */}
                   <div className="mt-6 pt-4 border-t border-border">
-                    <p className="text-xs text-muted-foreground text-center mb-3">Quick Demo Access</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setLoginEmail('admin@aquafarm.demo');
-                          setLoginPassword('demo123');
-                        }}
-                        className="text-xs h-9"
-                      >
-                        Admin
-                      </Button>
+                    <p className="text-xs text-muted-foreground text-center mb-3 flex items-center justify-center gap-1">
+                      <Users className="h-3 w-3" />
+                      Quick User Access
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -232,7 +223,7 @@ export default function Login() {
                         }}
                         className="text-xs h-9"
                       >
-                        Farmer
+                        🌾 Farmer
                       </Button>
                       <Button
                         type="button"
@@ -244,7 +235,33 @@ export default function Login() {
                         }}
                         className="text-xs h-9"
                       >
-                        User
+                        👤 User
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Admin Login Section */}
+                  <div className="mt-4 pt-4 border-t border-destructive/20">
+                    <div className="bg-destructive/5 rounded-lg p-3 border border-destructive/20">
+                      <p className="text-xs font-medium text-destructive text-center mb-2 flex items-center justify-center gap-1">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Administrator Access
+                      </p>
+                      <p className="text-[10px] text-muted-foreground text-center mb-3">
+                        Read-only system oversight • Cannot control devices
+                      </p>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          setLoginEmail('admin@aquafarm.demo');
+                          setLoginPassword('demo123');
+                        }}
+                        className="w-full text-xs h-9"
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5 mr-1" />
+                        Admin Login
                       </Button>
                     </div>
                   </div>
