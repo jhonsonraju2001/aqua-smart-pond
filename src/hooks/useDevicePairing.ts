@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ref, set, get, push } from 'firebase/database';
+import { ref, set, get } from 'firebase/database';
 import { database } from '@/lib/firebase';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,56 +8,51 @@ import { toast } from 'sonner';
 interface PairingResult {
   success: boolean;
   pondId?: string;
-  pairingCode?: string;
   error?: string;
 }
 
 interface UseDevicePairingReturn {
   isPairing: boolean;
-  generatePondId: () => string;
-  createPond: (name: string, deviceIp: string, location?: string) => Promise<PairingResult>;
-  regeneratePairingCode: (pondId: string, pondName: string) => Promise<string | null>;
+  linkPondToOwner: (pondId: string, name: string, deviceIp: string, location?: string) => Promise<PairingResult>;
+  regeneratePondId: (oldPondId: string, pondName: string) => Promise<string | null>;
   verifyPairing: (pondId: string) => Promise<boolean>;
-}
-
-// Generate a unique pond ID
-function generateUniquePondId(): string {
-  const timestamp = Date.now().toString(36);
-  const randomPart = Math.random().toString(36).substring(2, 6);
-  return `pond_${timestamp}_${randomPart}`.toUpperCase();
-}
-
-// Generate a 6-character alphanumeric pairing code
-function generateNewPairingCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
 }
 
 export function useDevicePairing(): UseDevicePairingReturn {
   const [isPairing, setIsPairing] = useState(false);
   const { user } = useAuth();
 
-  const generatePondId = useCallback(() => {
-    return generateUniquePondId();
-  }, []);
-
-  const createPond = useCallback(async (
+  // Link an existing ESP32 Pond ID to the current user's account
+  const linkPondToOwner = useCallback(async (
+    pondId: string,
     name: string,
     deviceIp: string,
     location?: string
   ): Promise<PairingResult> => {
     if (!user) {
+      toast.error('You must be logged in to link a device');
       return { success: false, error: 'Not authenticated' };
+    }
+
+    if (!pondId.trim()) {
+      toast.error('Pond ID is required');
+      return { success: false, error: 'Pond ID is required' };
     }
 
     setIsPairing(true);
     try {
-      const pondId = generateUniquePondId();
-      const pairingCode = generateNewPairingCode();
+      const normalizedPondId = pondId.trim().toUpperCase();
+
+      // Check if this pond ID already exists and is owned by someone else
+      if (database) {
+        const existingPond = await get(ref(database, `ponds/${normalizedPondId}`));
+        if (existingPond.exists()) {
+          const data = existingPond.val();
+          if (data.ownerUid && data.ownerUid !== user.id) {
+            throw new Error('This Pond ID is already linked to another account');
+          }
+        }
+      }
 
       // 1. Create in Supabase
       const { error: supabaseError } = await supabase.from('ponds').insert({
@@ -71,15 +66,16 @@ export function useDevicePairing(): UseDevicePairingReturn {
         throw new Error(supabaseError.message);
       }
 
-      // 2. Initialize in Firebase with proper structure including ownerUid
+      // 2. Initialize/update in Firebase with owner credentials
       if (database) {
-        await set(ref(database, `ponds/${pondId}`), {
+        await set(ref(database, `ponds/${normalizedPondId}`), {
           name,
-          ownerUid: user.id, // CRITICAL: Single source of truth for ownership
+          ownerUid: user.id, // CRITICAL: Lock to this user's UID
           ownerEmail: user.email, // Display only
           deviceIp,
           location: location || null,
           createdAt: Date.now(),
+          linkedAt: Date.now(),
           status: {
             online: false,
             lastSeen: null,
@@ -95,9 +91,8 @@ export function useDevicePairing(): UseDevicePairingReturn {
           },
           schedules: {},
           config: {
-            pairingCode,
-            pairingCodeExpires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-            paired: false,
+            paired: true,
+            pairedAt: Date.now(),
           },
           access: {
             [user.id]: {
@@ -109,11 +104,11 @@ export function useDevicePairing(): UseDevicePairingReturn {
         });
       }
 
-      toast.success('Pond created! Use the pairing code to connect your device.');
-      return { success: true, pondId, pairingCode };
+      toast.success('Device linked successfully! You are now the owner.');
+      return { success: true, pondId: normalizedPondId };
     } catch (err) {
-      console.error('Error creating pond:', err);
-      const message = err instanceof Error ? err.message : 'Failed to create pond';
+      console.error('Error linking pond:', err);
+      const message = err instanceof Error ? err.message : 'Failed to link device';
       toast.error(message);
       return { success: false, error: message };
     } finally {
@@ -121,32 +116,52 @@ export function useDevicePairing(): UseDevicePairingReturn {
     }
   }, [user]);
 
-  const regeneratePairingCode = useCallback(async (
-    pondId: string,
+  // Regenerate a new Pond ID for an existing pond (migrate data)
+  const regeneratePondId = useCallback(async (
+    oldPondId: string,
     pondName: string
   ): Promise<string | null> => {
-    if (!database) return null;
+    if (!database || !user) return null;
 
     try {
-      const code = generateNewPairingCode();
+      // Generate new pond ID
+      const timestamp = Date.now().toString(36);
+      const randomPart = Math.random().toString(36).substring(2, 6);
+      const newPondId = `POND_${timestamp}_${randomPart}`.toUpperCase();
       
-      await set(ref(database, `ponds/${pondId}/config/pairingCode`), code);
-      await set(ref(database, `ponds/${pondId}/config/pairingCodeExpires`), Date.now() + 24 * 60 * 60 * 1000);
+      // Get existing pond data
+      const existingData = await get(ref(database, `ponds/${oldPondId}`));
+      if (!existingData.exists()) {
+        throw new Error('Pond not found');
+      }
+
+      const data = existingData.val();
       
-      // Also store in a global lookup for easy ESP32 verification
-      await set(ref(database, `pairingCodes/${code}`), {
-        pondId,
-        pondName,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      // Verify ownership
+      if (data.ownerUid !== user.id) {
+        throw new Error('You do not own this pond');
+      }
+
+      // Create new pond with same data but new ID
+      await set(ref(database, `ponds/${newPondId}`), {
+        ...data,
+        previousPondId: oldPondId,
+        regeneratedAt: Date.now(),
       });
 
-      return code;
+      // Mark old pond as migrated (don't delete for audit trail)
+      await set(ref(database, `ponds/${oldPondId}/migratedTo`), newPondId);
+      await set(ref(database, `ponds/${oldPondId}/migratedAt`), Date.now());
+
+      toast.success(`New Pond ID generated: ${newPondId}`);
+      return newPondId;
     } catch (err) {
-      console.error('Error generating pairing code:', err);
+      console.error('Error regenerating pond ID:', err);
+      const message = err instanceof Error ? err.message : 'Failed to regenerate pond ID';
+      toast.error(message);
       return null;
     }
-  }, []);
+  }, [user]);
 
   const verifyPairing = useCallback(async (pondId: string): Promise<boolean> => {
     if (!database) return false;
@@ -162,9 +177,8 @@ export function useDevicePairing(): UseDevicePairingReturn {
 
   return {
     isPairing,
-    generatePondId,
-    createPond,
-    regeneratePairingCode,
+    linkPondToOwner,
+    regeneratePondId,
     verifyPairing,
   };
 }
