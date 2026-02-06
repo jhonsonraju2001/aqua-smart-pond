@@ -339,7 +339,7 @@ export default function DeviceSchedules() {
               <div className="text-xs text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">Schedule Execution</p>
                 <ul className="space-y-0.5">
-                  <li>• Schedules run on ESP32 time (NTP synced)</li>
+                  <li>• Schedules run on your local time — devices turn ON/OFF exactly at the set times</li>
                   <li>• Manual commands override active schedules</li>
                   <li>• Auto Mode overrides all schedules</li>
                 </ul>
