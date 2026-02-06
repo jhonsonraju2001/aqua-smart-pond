@@ -12,8 +12,11 @@ import { motion } from 'framer-motion';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, signup, isLoading } = useAuth();
+  const { login, signup, resetPassword, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [isSendingReset, setIsSendingReset] = useState(false);
   
   // Login form
   const [loginEmail, setLoginEmail] = useState('');
@@ -39,6 +42,25 @@ export default function Login() {
       navigate('/');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Login failed');
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) {
+      toast.error('Please enter your email address');
+      return;
+    }
+    setIsSendingReset(true);
+    try {
+      await resetPassword(forgotEmail);
+      toast.success('Password reset link sent! Check your email.');
+      setShowForgotPassword(false);
+      setForgotEmail('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send reset link');
+    } finally {
+      setIsSendingReset(false);
     }
   };
 
@@ -189,6 +211,16 @@ export default function Login() {
                       </div>
                     </div>
 
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotPassword(true)}
+                        className="text-xs text-primary hover:underline font-medium"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+
                     <Button 
                       type="submit" 
                       className="w-full h-12 text-base font-semibold bg-gradient-to-r from-primary to-[hsl(180,70%,40%)] hover:opacity-90 transition-opacity shadow-lg" 
@@ -205,6 +237,56 @@ export default function Login() {
                       )}
                     </Button>
                   </form>
+
+                  {/* Forgot Password Modal */}
+                  {showForgotPassword && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 p-4 rounded-lg border border-primary/20 bg-primary/5"
+                    >
+                      <h4 className="text-sm font-semibold mb-1">Reset Password</h4>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Enter your email and we'll send you a reset link.
+                      </p>
+                      <form onSubmit={handleForgotPassword} className="space-y-3">
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            type="email"
+                            placeholder="you@example.com"
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            className="pl-10 h-10 bg-background"
+                            autoComplete="email"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => { setShowForgotPassword(false); setForgotEmail(''); }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="submit"
+                            size="sm"
+                            className="flex-1"
+                            disabled={isSendingReset}
+                          >
+                            {isSendingReset ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              'Send Reset Link'
+                            )}
+                          </Button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  )}
 
                   {/* User Demo Access */}
                   <div className="mt-6 pt-4 border-t border-border">
