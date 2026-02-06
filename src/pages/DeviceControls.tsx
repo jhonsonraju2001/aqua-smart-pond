@@ -5,6 +5,7 @@ import { usePondData } from "@/hooks/usePondData";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useCriticalAutoMode } from "@/hooks/useCriticalAutoMode";
 import { useFirebasePondStatus } from "@/hooks/useFirebasePondStatus";
+import { useScheduleExecutor } from "@/hooks/useScheduleExecutor";
 import { useAuth } from "@/contexts/AuthContext";
 import { database } from "@/lib/firebase";
 import { Header } from "@/components/Header";
@@ -32,6 +33,9 @@ export default function DeviceControls() {
 
   // Initialize critical auto mode monitoring
   useCriticalAutoMode(stablePondId);
+  
+  // Schedule executor - runs every 30s to execute ON/OFF at scheduled times
+  useScheduleExecutor(stablePondId);
   
   // Get pond online status
   const { isOnline, lastSeen } = useFirebasePondStatus(stablePondId);
