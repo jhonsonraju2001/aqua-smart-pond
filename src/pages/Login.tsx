@@ -152,9 +152,9 @@ export default function Login() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-xl">
+          <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-xl overflow-hidden">
             <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 m-4 mr-8 bg-muted/50">
+              <TabsList className="grid w-full grid-cols-2 mx-4 mt-4 mb-0 w-[calc(100%-2rem)] bg-muted/50">
                 <TabsTrigger value="login" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                   Sign In
                 </TabsTrigger>
