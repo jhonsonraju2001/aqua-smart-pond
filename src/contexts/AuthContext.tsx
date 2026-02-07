@@ -83,7 +83,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // Check initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        // Handle stale/invalid refresh token gracefully
+        console.warn('Session recovery failed, clearing stale session:', error.message);
+        supabase.auth.signOut().catch(() => {});
+        setSession(null);
+        setUser(null);
+        setIsAdmin(false);
+        setIsLoading(false);
+        return;
+      }
       setSession(session);
       if (session?.user) {
         fetchUserProfile(session.user);
