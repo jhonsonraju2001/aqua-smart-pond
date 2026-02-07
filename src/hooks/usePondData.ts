@@ -5,7 +5,7 @@ import { useFirebaseDevices } from './useFirebaseDevices';
 import { useFirebaseSensors } from './useFirebaseSensors';
 import { useFirebaseAlerts } from './useFirebaseAlerts';
 import { useFirebasePondStatus } from './useFirebasePondStatus';
-import { useFirebasePonds } from './useFirebasePonds';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface PondWithOwnership extends Pond {
   ownerUid?: string;
@@ -14,29 +14,82 @@ export interface PondWithOwnership extends Pond {
 }
 
 export function usePondData() {
-  // Use Firebase pond discovery for real-time pond list
-  const { ponds: firebasePonds, isLoading, error, firebaseConnected } = useFirebasePonds();
+  const { user, isAdmin } = useAuth();
+  const [ponds, setPonds] = useState<PondWithOwnership[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Map Firebase ponds to app Pond type with ownership info
-  const ponds: PondWithOwnership[] = firebasePonds.map((fbPond) => ({
-    id: fbPond.id,
-    name: fbPond.name,
-    ipAddress: 'Firebase', // No IP needed - Firebase is the bridge
-    location: undefined,
-    status: (fbPond.isOnline ? 'online' : 'offline') as 'online' | 'offline' | 'warning' | 'critical',
-    lastUpdated: fbPond.lastSeen || new Date(),
-    // Include ownership information
-    ownerUid: fbPond.ownerUid,
-    ownerEmail: fbPond.ownerEmail,
-    isOwner: fbPond.isOwner,
-  }));
+  const fetchPonds = useCallback(async () => {
+    if (!user) {
+      setPonds([]);
+      setIsLoading(false);
+      return;
+    }
 
-  const refetch = useCallback(() => {
-    // Firebase provides real-time updates, no manual refetch needed
-    console.log('Pond list updates automatically via Firebase');
-  }, []);
+    try {
+      setIsLoading(true);
+      setError(null);
 
-  return { ponds, isLoading, error, refetch, firebaseConnected };
+      // Supabase RLS handles access control:
+      // - Normal users see only their ponds (user_id = auth.uid())
+      // - Admins see all ponds (has_role check)
+      const { data, error: fetchError } = await supabase
+        .from('ponds')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw fetchError;
+
+      const mappedPonds: PondWithOwnership[] = (data || []).map((pond) => ({
+        id: pond.id,
+        name: pond.name,
+        ipAddress: pond.device_ip,
+        location: pond.location || undefined,
+        status: 'online' as const,
+        lastUpdated: new Date(pond.updated_at),
+        ownerUid: pond.user_id,
+        isOwner: pond.user_id === user.id,
+      }));
+
+      setPonds(mappedPonds);
+    } catch (err) {
+      console.error('Error fetching ponds:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch ponds');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, isAdmin]);
+
+  useEffect(() => {
+    fetchPonds();
+  }, [fetchPonds]);
+
+  // Subscribe to realtime changes on ponds table
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('ponds-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ponds',
+        },
+        () => {
+          // Refetch when ponds table changes
+          fetchPonds();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchPonds]);
+
+  return { ponds, isLoading, error, refetch: fetchPonds, firebaseConnected: true };
 }
 
 export function useSensorData(pondId: string = 'pond1', readOnly: boolean = false) {
