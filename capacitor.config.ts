@@ -9,10 +9,15 @@ const config: CapacitorConfig = {
     cleartext: true
   },
   ios: {
-    contentInset: 'automatic'
+    contentInset: 'automatic',
+    preferredContentMode: 'mobile',
+    scrollEnabled: true,
+    allowsLinkPreview: false,
   },
   android: {
-    allowMixedContent: true
+    allowMixedContent: true,
+    captureInput: true,
+    webContentsDebuggingEnabled: false,
   },
   plugins: {
     SplashScreen: {
@@ -24,7 +29,15 @@ const config: CapacitorConfig = {
       showSpinner: false,
       splashFullScreen: true,
       splashImmersive: true
-    }
+    },
+    StatusBar: {
+      style: 'LIGHT',
+      backgroundColor: '#0F4C81',
+    },
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true,
+    },
   }
 };
 
