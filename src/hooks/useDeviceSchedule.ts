@@ -98,7 +98,7 @@ export function useDeviceSchedule(pondId: string, deviceType: string) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!pondId || !deviceType) return;
+    if (!pondId || !deviceType || !database) return;
 
     const scheduleRef = ref(database, `ponds/${pondId}/schedules/${deviceType}`);
 
