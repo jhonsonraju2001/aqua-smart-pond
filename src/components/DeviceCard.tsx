@@ -73,7 +73,7 @@ export function DeviceCard({ pondId, type, title, className, cameraUrl, readOnly
   };
 
   useEffect(() => {
-    if (type === "camera") return;
+    if (type === "camera" || !database) return;
     const deviceRef = ref(database, `ponds/${pondId}/devices/${type}`);
     const unsubscribe = onValue(
       deviceRef,
