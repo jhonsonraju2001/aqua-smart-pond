@@ -22,6 +22,10 @@ import AdminPondDetails from "./pages/AdminPondDetails";
 import Profile from "./pages/Profile";
 import Notifications from "./pages/Notifications";
 import Security from "./pages/Security";
+import CameraDashboard from "./pages/CameraDashboard";
+import CameraLiveView from "./pages/CameraLiveView";
+import CameraSettings from "./pages/CameraSettings";
+import CameraGallery from "./pages/CameraGallery";
 import NotFound from "./pages/NotFound";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 
