@@ -186,6 +186,46 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+      <Route 
+        path="/cameras" 
+        element={
+          <ProtectedRoute>
+            <CameraDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras/:cameraId/live" 
+        element={
+          <ProtectedRoute>
+            <CameraLiveView />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras/:cameraId/settings" 
+        element={
+          <ProtectedRoute>
+            <CameraSettings />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras/gallery" 
+        element={
+          <ProtectedRoute>
+            <CameraGallery />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras/recordings" 
+        element={
+          <ProtectedRoute>
+            <CameraGallery />
+          </ProtectedRoute>
+        } 
+      />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
