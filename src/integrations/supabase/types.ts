@@ -55,6 +55,171 @@ export type Database = {
           },
         ]
       }
+      camera_recordings: {
+        Row: {
+          camera_id: string
+          duration_seconds: number | null
+          ended_at: string | null
+          file_size_bytes: number | null
+          id: string
+          recording_type: string
+          started_at: string
+          status: string
+          user_id: string
+          video_url: string | null
+        }
+        Insert: {
+          camera_id: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          recording_type?: string
+          started_at?: string
+          status?: string
+          user_id: string
+          video_url?: string | null
+        }
+        Update: {
+          camera_id?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          recording_type?: string
+          started_at?: string
+          status?: string
+          user_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "camera_recordings_camera_id_fkey"
+            columns: ["camera_id"]
+            isOneToOne: false
+            referencedRelation: "cameras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      camera_snapshots: {
+        Row: {
+          camera_id: string
+          captured_at: string
+          id: string
+          image_url: string
+          is_motion_triggered: boolean
+          thumbnail_url: string | null
+          user_id: string
+        }
+        Insert: {
+          camera_id: string
+          captured_at?: string
+          id?: string
+          image_url: string
+          is_motion_triggered?: boolean
+          thumbnail_url?: string | null
+          user_id: string
+        }
+        Update: {
+          camera_id?: string
+          captured_at?: string
+          id?: string
+          image_url?: string
+          is_motion_triggered?: boolean
+          thumbnail_url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "camera_snapshots_camera_id_fkey"
+            columns: ["camera_id"]
+            isOneToOne: false
+            referencedRelation: "cameras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cameras: {
+        Row: {
+          audio_enabled: boolean
+          created_at: string
+          frame_rate: number | null
+          id: string
+          ip_address: string
+          is_online: boolean
+          last_seen: string | null
+          motion_alerts_enabled: boolean
+          motion_detection_enabled: boolean
+          motion_sensitivity: number
+          name: string
+          password: string | null
+          pond_id: string | null
+          port: number
+          resolution: string | null
+          rtsp_url: string | null
+          stream_quality: string
+          stream_type: string
+          updated_at: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          audio_enabled?: boolean
+          created_at?: string
+          frame_rate?: number | null
+          id?: string
+          ip_address: string
+          is_online?: boolean
+          last_seen?: string | null
+          motion_alerts_enabled?: boolean
+          motion_detection_enabled?: boolean
+          motion_sensitivity?: number
+          name: string
+          password?: string | null
+          pond_id?: string | null
+          port?: number
+          resolution?: string | null
+          rtsp_url?: string | null
+          stream_quality?: string
+          stream_type?: string
+          updated_at?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          audio_enabled?: boolean
+          created_at?: string
+          frame_rate?: number | null
+          id?: string
+          ip_address?: string
+          is_online?: boolean
+          last_seen?: string | null
+          motion_alerts_enabled?: boolean
+          motion_detection_enabled?: boolean
+          motion_sensitivity?: number
+          name?: string
+          password?: string | null
+          pond_id?: string | null
+          port?: number
+          resolution?: string | null
+          rtsp_url?: string | null
+          stream_quality?: string
+          stream_type?: string
+          updated_at?: string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cameras_pond_id_fkey"
+            columns: ["pond_id"]
+            isOneToOne: false
+            referencedRelation: "ponds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       device_schedules: {
         Row: {
           created_at: string

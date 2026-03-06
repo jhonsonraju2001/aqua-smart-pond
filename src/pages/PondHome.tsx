@@ -19,7 +19,8 @@ import {
   Waves,
   User,
   ShieldCheck,
-  Eye
+  Eye,
+  Camera
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -215,6 +216,21 @@ export default function PondHome() {
               variant="alerts"
               badge={pondAlerts.length}
               onClick={() => navigate(`/pond/${activePondId}/alerts`)}
+            />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+            className="col-span-2"
+          >
+            <ActionButton
+              icon={Camera}
+              label="Cameras"
+              description="Live CCTV & monitoring"
+              variant="primary"
+              onClick={() => navigate('/cameras')}
             />
           </motion.div>
         </div>

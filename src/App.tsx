@@ -22,6 +22,10 @@ import AdminPondDetails from "./pages/AdminPondDetails";
 import Profile from "./pages/Profile";
 import Notifications from "./pages/Notifications";
 import Security from "./pages/Security";
+import CameraDashboard from "./pages/CameraDashboard";
+import CameraLiveView from "./pages/CameraLiveView";
+import CameraSettings from "./pages/CameraSettings";
+import CameraGallery from "./pages/CameraGallery";
 import NotFound from "./pages/NotFound";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 
@@ -179,6 +183,46 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras" 
+        element={
+          <ProtectedRoute>
+            <CameraDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras/:cameraId/live" 
+        element={
+          <ProtectedRoute>
+            <CameraLiveView />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras/:cameraId/settings" 
+        element={
+          <ProtectedRoute>
+            <CameraSettings />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras/gallery" 
+        element={
+          <ProtectedRoute>
+            <CameraGallery />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/cameras/recordings" 
+        element={
+          <ProtectedRoute>
+            <CameraGallery />
           </ProtectedRoute>
         } 
       />
